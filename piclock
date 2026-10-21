@@ -1,0 +1,292 @@
+#!/usr/bin/env bash
+# piclock: control PiClock from an SSH session.
+#   piclock status | update | config | restart | logs | show | hide
+set -uo pipefail
+
+APP_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+PY="$APP_DIR/.venv/bin/python"
+CONFIG="$APP_DIR/config.ini"
+SKIP_FILE="$APP_DIR/.update-skip"   # a GitHub version that failed to start
+KIOSK_PATTERN="chromium.*--kiosk"
+OWNER="$(stat -c %U "$APP_DIR")"
+OWNER_HOME="$(getent passwd "$OWNER" | cut -d: -f6)"
+
+# Run a command as the user who owns the clock, even when this script runs as root
+# (the automatic updater does), so files keep the right owner.
+as_owner() {
+  if [[ $EUID -eq 0 && "$OWNER" != "root" ]]; then
+    runuser -u "$OWNER" -- env HOME="$OWNER_HOME" "$@"
+  else
+    "$@"
+  fi
+}
+git_() { as_owner git -C "$APP_DIR" "$@"; }
+
+config_bool() {  # config_bool SECTION KEY DEFAULT(yes/no): succeeds when the setting is on
+  "$PY" - "$CONFIG" "$1" "$2" "$3" 2>/dev/null <<'EOF'
+import configparser, sys
+p = configparser.ConfigParser(interpolation=None, delimiters=("=",))
+p.read(sys.argv[1], encoding="utf-8-sig")
+sys.exit(0 if p.getboolean(sys.argv[2], sys.argv[3], fallback=sys.argv[4] == "yes") else 1)
+EOF
+}
+
+port() {
+  "$PY" - "$CONFIG" 2>/dev/null <<'EOF' || echo 8080
+import configparser, sys
+p = configparser.ConfigParser(interpolation=None, delimiters=("=",))
+p.read(sys.argv[1], encoding="utf-8-sig")
+print(p.get("server", "port", fallback="8080"))
+EOF
+}
+
+cmd_status() {
+  if systemctl is-active --quiet piclock 2>/dev/null; then
+    echo "Service:  running"
+  else
+    echo "Service:  stopped (start it with: piclock restart)"
+  fi
+  if pgrep -f "$KIOSK_PATTERN" >/dev/null; then
+    echo "Screen:   showing the clock"
+  else
+    echo "Screen:   not showing (open it with: piclock show)"
+  fi
+  if [[ -d "$APP_DIR/.git" ]]; then
+    echo "Version:  $(git_ log -1 --format='%h from %cr: %s' 2>/dev/null)"
+    if ! systemctl is-enabled --quiet piclock-update.timer 2>/dev/null; then
+      echo "Updates:  manual (run: piclock update)"
+    elif config_bool updates auto_update yes; then
+      echo "Updates:  automatic from GitHub every 10 minutes"
+    else
+      echo "Updates:  automatic updates are off in config.ini"
+    fi
+    if [[ -f "$SKIP_FILE" ]]; then
+      echo "          The newest GitHub version failed to start, so the previous one is running."
+    fi
+  fi
+  "$PY" - "$(port)" <<'EOF'
+import json, sys, time, urllib.request
+
+try:
+    with urllib.request.urlopen(f"http://127.0.0.1:{sys.argv[1]}/api/all", timeout=5) as r:
+        d = json.load(r)
+except Exception:
+    print("Data:     the service isn't answering. See: piclock logs")
+    sys.exit()
+
+def age(t):
+    if not t:
+        return "not yet"
+    m = int((time.time() - t) // 60)
+    return "just now" if m < 1 else f"{m} min ago"
+
+def line(label, text):
+    print(f"{(label + ':') if label else '':<10}{text}")
+
+w = d["weather"]
+if not w["enabled"]:
+    line("Weather", "not set up")
+elif w["data"]:
+    line("Weather", f"{w['data']['temp']}°, updated {age(w['updated'])}")
+    if w["error"]:
+        line("", f"last refresh failed: {w['error']}")
+else:
+    line("Weather", f"failed: {w['error']}" if w["error"] else "loading")
+
+m = d["mail"]
+if not m["enabled"]:
+    line("Mail", "not set up")
+elif m["data"]:
+    for b in m["data"]["boxes"]:
+        line("Mail", f"{b['name']}: " + (b["error"] or f"{b['unread']} unread"))
+    print(f"{'':<10}checked {age(m['updated'])}")
+else:
+    line("Mail", f"failed: {m['error']}" if m["error"] else "checking")
+
+c = d["calendar"]
+if not c["enabled"]:
+    line("Calendar", "not set up")
+elif c["data"]:
+    line("Calendar", f"{len(c['data']['events'])} upcoming events, updated {age(c['updated'])}")
+    for err in c["data"]["errors"]:
+        line("", err)
+else:
+    line("Calendar", f"failed: {c['error']}" if c["error"] else "loading")
+EOF
+}
+
+check_config() {
+  "$PY" - "$CONFIG" <<'EOF'
+import configparser, sys
+p = configparser.ConfigParser(interpolation=None, delimiters=("=",))
+try:
+    p.read(sys.argv[1], encoding="utf-8-sig")
+except configparser.Error as exc:
+    print("config.ini has a mistake, so the clock can't use it yet:\n")
+    print("  " + str(exc).replace("\n", "\n  "))
+    print("\nEach calendar link goes on its own indented line under 'urls ='.")
+    print("Fix it with: piclock config")
+    sys.exit(1)
+EOF
+}
+
+cmd_restart() {
+  sudo systemctl restart piclock && echo "Restarted. The screen updates within 30 seconds."
+}
+
+cmd_config() {
+  local before after
+  before="$(md5sum "$CONFIG" 2>/dev/null)"
+  nano "$CONFIG"
+  after="$(md5sum "$CONFIG" 2>/dev/null)"
+  if [[ "$before" != "$after" ]]; then
+    check_config || return 1
+    cmd_restart
+    sleep 8
+    cmd_status
+  else
+    echo "No changes."
+  fi
+}
+
+cmd_logs() {
+  echo "Showing live logs. Press Ctrl+C to stop."
+  journalctl -u piclock -u piclock-update -n 40 -f
+}
+
+wait_healthy() {
+  local p; p="$(port)"
+  for _ in $(seq 1 45); do
+    sleep 1
+    curl -fs "http://127.0.0.1:$p/api/health" >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
+
+install_requirements_if_changed() {  # FROM TO
+  if ! git_ diff --quiet "$1" "$2" -- requirements.txt; then
+    echo "Installing updated Python packages..."
+    as_owner "$APP_DIR/.venv/bin/pip" install --quiet -r "$APP_DIR/requirements.txt"
+  fi
+}
+
+cmd_update() {
+  local auto=""
+  [[ "${1:-}" == "--auto" ]] && auto=1
+  if [[ $EUID -ne 0 ]]; then
+    exec sudo /bin/bash "$APP_DIR/piclock" update "$@"
+  fi
+  if [[ ! -d "$APP_DIR/.git" ]]; then
+    echo "This copy of the clock wasn't installed from GitHub, so it can't update itself."
+    echo "See \"Install on the Pi\" in README.md."
+    return 1
+  fi
+  if [[ -n "$auto" ]] && ! config_bool updates auto_update yes; then
+    return 0
+  fi
+  check_config || return 1
+
+  if ! git_ fetch --quiet origin; then
+    echo "Couldn't reach GitHub. Check the Pi's internet connection."
+    return 1
+  fi
+  local old new
+  old="$(git_ rev-parse HEAD)"
+  if ! new="$(git_ rev-parse '@{upstream}' 2>/dev/null)"; then
+    echo "This copy isn't linked to a GitHub branch. Reinstall it with git clone (see README.md)."
+    return 1
+  fi
+  if [[ "$old" == "$new" ]]; then
+    [[ -z "$auto" ]] && echo "Already up to date: $(git_ log -1 --format='%h %s')"
+    return 0
+  fi
+  # The automatic updater doesn't retry a version that already failed to start.
+  if [[ -n "$auto" && -f "$SKIP_FILE" && "$(cat "$SKIP_FILE")" == "$new" ]]; then
+    return 0
+  fi
+
+  echo "Installing these changes from GitHub:"
+  git_ --no-pager log --reverse --format='  %h  %s' "$old..$new"
+  git_ reset --hard --quiet "$new"   # GitHub is the master copy; config.ini is never touched
+  install_requirements_if_changed "$old" "$new"
+  systemctl restart piclock
+
+  if wait_healthy; then
+    rm -f "$SKIP_FILE"
+    echo "Updated. The screen reloads itself within 30 seconds."
+    if ! git_ diff --quiet "$old" "$new" -- install.sh; then
+      echo "install.sh changed too. To apply its setup changes, run: bash $APP_DIR/install.sh"
+    fi
+    return 0
+  fi
+
+  echo
+  echo "The new version didn't start. The last lines of its log:"
+  journalctl -u piclock -n 12 --no-pager -o cat 2>/dev/null | sed 's/^/  /'
+  echo
+  echo "Going back to the version that worked..."
+  echo "$new" > "$SKIP_FILE"; chown "$OWNER" "$SKIP_FILE" 2>/dev/null
+  git_ reset --hard --quiet "$old"
+  install_requirements_if_changed "$new" "$old"
+  systemctl restart piclock
+  if wait_healthy; then
+    echo "The clock is running the previous version again."
+  else
+    echo "The previous version didn't start either. Check: piclock logs"
+  fi
+  echo "Fix the problem on GitHub. Your next change there is installed automatically."
+  return 1
+}
+
+cmd_show() {
+  if pgrep -f "$KIOSK_PATTERN" >/dev/null; then
+    echo "The clock is already on screen."
+    return
+  fi
+  # Point the browser at the Pi's own screen rather than this SSH session.
+  export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+  local sock found=""
+  for sock in "$XDG_RUNTIME_DIR"/wayland-*; do
+    if [[ -S "$sock" ]]; then export WAYLAND_DISPLAY="$(basename "$sock")"; found=1; break; fi
+  done
+  if [[ -S /tmp/.X11-unix/X0 ]]; then
+    export DISPLAY=:0 XAUTHORITY="$HOME/.Xauthority"; found=1
+  fi
+  if [[ -z "$found" ]]; then
+    echo "No desktop is running on the Pi's screen yet. Reboot with: sudo reboot"
+    return 1
+  fi
+  nohup /bin/bash "$APP_DIR/kiosk.sh" >/dev/null 2>&1 &
+  echo "Opening the clock on the Pi's screen."
+}
+
+cmd_hide() {
+  if pkill -f "$KIOSK_PATTERN"; then
+    echo "Closed the clock on the Pi's screen. Bring it back with: piclock show"
+  else
+    echo "The clock isn't on screen."
+  fi
+}
+
+case "${1:-}" in
+  status)  cmd_status ;;
+  update)  shift; cmd_update "$@" ;;
+  config)  cmd_config ;;
+  restart) cmd_restart ;;
+  logs)    cmd_logs ;;
+  show)    cmd_show ;;
+  hide)    cmd_hide ;;
+  *)
+    cat <<'USAGE'
+Usage: piclock <command>
+
+  status    Check the service, the screen, and your weather, mail and calendar
+  update    Install the latest version from GitHub now
+  config    Edit your settings (restarts automatically when you save changes)
+  restart   Restart the service after changing files
+  logs      Watch the live log (Ctrl+C to stop)
+  show      Open the clock on the Pi's screen
+  hide      Close the clock on the Pi's screen
+USAGE
+    ;;
+esac

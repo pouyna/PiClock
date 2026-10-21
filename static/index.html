@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PiClock</title>
+<style>
+  @font-face {
+    font-family: "Big Shoulders Display";
+    src: url("/static/fonts/BigShouldersDisplay.ttf") format("truetype");
+    font-weight: 100 900;
+    font-display: block;
+  }
+  @font-face {
+    font-family: "Atkinson Hyperlegible Next";
+    src: url("/static/fonts/AtkinsonHyperlegibleNext.ttf") format("truetype");
+    font-weight: 200 800;
+    font-display: block;
+  }
+
+  :root {
+    color-scheme: dark;
+    --night: #172031;     /* the page: late-evening sky */
+    --dusk: #222E44;      /* tracks and quiet surfaces */
+    --bone: #EEE7D7;      /* primary text */
+    --mist: #A5ADBB;      /* secondary text */
+    --haze: #67728A;      /* tertiary text, ticks */
+    --sodium: #F2B45C;    /* the sun, and anything that just happened */
+    --u: min(1vw, 1.6667vh);   /* layout unit: the screen is a 100 x 60 grid */
+    --display: "Big Shoulders Display", "Arial Narrow", "Roboto Condensed", sans-serif;
+    --text: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", "DejaVu Sans", system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body {
+    background: var(--night);
+    color: var(--bone);
+    font-family: var(--text);
+    font-size: calc(var(--u) * 2.05);
+    line-height: 1.3;
+    cursor: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #app {
+    height: 100%;
+    padding: calc(var(--u) * 3) calc(var(--u) * 4.2) calc(var(--u) * 2.4);
+    display: grid;
+    grid-template-columns: 1fr calc(var(--u) * 31);
+    grid-template-rows: auto 1fr;
+    column-gap: calc(var(--u) * 5);
+    row-gap: calc(var(--u) * 2.6);
+    transition: transform 3s ease;
+  }
+
+  /* ---------- time ---------- */
+  .time { min-width: 0; }
+  .date {
+    font-size: calc(var(--u) * 2.6);
+    color: var(--mist);
+    letter-spacing: 0.01em;
+  }
+  .clock {
+    display: flex;
+    align-items: flex-start;
+    margin-top: calc(var(--u) * 1.1);
+    font-family: var(--display);
+    font-weight: 700;
+    line-height: 0.8;
+    font-variant-numeric: tabular-nums;
+  }
+  #hm {
+    font-size: calc(var(--u) * 22.5);
+    letter-spacing: -0.01em;
+    margin-left: -0.04em;
+  }
+  .clock-side {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-self: stretch;
+    margin-left: calc(var(--u) * 1.4);
+    padding: calc(var(--u) * 0.6) 0 calc(var(--u) * 0.2);
+    font-weight: 500;
+    color: var(--mist);
+  }
+  #sec { font-size: calc(var(--u) * 4.4); }
+  #ampm { font-size: calc(var(--u) * 4.8); }
+
+  /* the day ribbon: midnight to midnight, daylight in amber, today's events above */
+  .ribbon {
+    position: relative;
+    height: calc(var(--u) * 5.8);
+    margin-top: calc(var(--u) * 2);
+  }
+  .rb-track, .rb-day {
+    position: absolute;
+    top: calc(var(--u) * 2.2);
+    height: calc(var(--u) * 0.5);
+    border-radius: calc(var(--u) * 0.25);
+  }
+  .rb-track { left: 0; right: 0; background: var(--dusk); }
+  .rb-day { background: color-mix(in srgb, var(--sodium) 72%, var(--dusk)); }
+  .rb-past {
+    position: absolute; left: 0;
+    top: calc(var(--u) * 2.2);
+    height: calc(var(--u) * 0.5);
+    background: var(--night);
+    opacity: 0.5;
+    border-radius: calc(var(--u) * 0.25) 0 0 calc(var(--u) * 0.25);
+  }
+  .rb-tick {
+    position: absolute;
+    top: calc(var(--u) * 3.1);
+    width: 1px;
+    height: calc(var(--u) * 0.8);
+    background: var(--haze);
+    opacity: 0.6;
+  }
+  .rb-event {
+    position: absolute;
+    top: 0;
+    height: calc(var(--u) * 0.8);
+    min-width: calc(var(--u) * 0.8);
+    background: var(--mist);
+    border-radius: calc(var(--u) * 0.4);
+    opacity: 0.85;
+  }
+  .rb-now {
+    position: absolute;
+    top: calc(var(--u) * 1.45);
+    width: calc(var(--u) * 2);
+    height: calc(var(--u) * 2);
+    margin-left: calc(var(--u) * -1);
+    border-radius: 50%;
+    background: var(--bone);
+    box-shadow: 0 0 0 calc(var(--u) * 0.45) var(--night);
+  }
+  .rb-now.sun { background: var(--sodium); }
+  .rb-label {
+    position: absolute;
+    top: calc(var(--u) * 3.7);
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: calc(var(--u) * 1.7);
+    color: var(--mist);
+  }
+
+  /* ---------- weather ---------- */
+  .weather { min-width: 0; padding-top: calc(var(--u) * 0.6); }
+  .wx-now { display: flex; align-items: center; gap: calc(var(--u) * 1.6); }
+  .wx-now svg { width: calc(var(--u) * 8); height: calc(var(--u) * 8); flex: none; color: var(--bone); }
+  .wx-temp {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: calc(var(--u) * 11);
+    line-height: 0.85;
+  }
+  .wx-cond { font-size: calc(var(--u) * 2.6); margin-top: calc(var(--u) * 0.8); }
+  .wx-detail {
+    display: flex; flex-wrap: wrap; column-gap: calc(var(--u) * 2.2);
+    color: var(--mist);
+    margin-top: calc(var(--u) * 0.4);
+  }
+  .wx-days {
+    list-style: none; margin: calc(var(--u) * 2) 0 0; padding: 0;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: calc(var(--u) * 1);
+  }
+  .wx-days li { display: grid; justify-items: start; row-gap: calc(var(--u) * 0.3); }
+  .wx-days .d { color: var(--mist); font-size: calc(var(--u) * 1.8); }
+  .wx-days svg { width: calc(var(--u) * 3.6); height: calc(var(--u) * 3.6); color: var(--mist); }
+  .wx-days .t { font-family: var(--display); font-weight: 600; font-size: calc(var(--u) * 2.5); line-height: 1; white-space: nowrap; }
+  .wx-days .t span { color: var(--haze); margin-left: calc(var(--u) * 0.4); }
+
+  /* ---------- agenda & mail ---------- */
+  .agenda, .mail { min-height: 0; overflow: hidden; position: relative; }
+  .agenda, .mail { -webkit-mask-image: linear-gradient(#000 82%, transparent); mask-image: linear-gradient(#000 82%, transparent); }
+
+  .day + .day { margin-top: calc(var(--u) * 1.2); }
+  .day h2 {
+    margin: 0 0 calc(var(--u) * 0.3);
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: calc(var(--u) * 3);
+    line-height: 1;
+    color: var(--bone);
+  }
+  .day.later h2 { color: var(--mist); }
+  .ev {
+    display: grid;
+    grid-template-columns: calc(var(--u) * 8.5) minmax(0, 1fr) auto;
+    column-gap: calc(var(--u) * 1.4);
+    align-items: baseline;
+    padding: calc(var(--u) * 0.2) 0;
+  }
+  .ev .when { color: var(--mist); white-space: nowrap; font-family: var(--display); font-weight: 600; font-size: calc(var(--u) * 2.5); }
+  .ev .what { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ev .soon { color: var(--sodium); white-space: nowrap; font-size: calc(var(--u) * 1.8); }
+  .ev.now .when { color: var(--sodium); }
+  .ev .where { color: var(--haze); margin-left: calc(var(--u) * 1); }
+
+  .mail-head { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: calc(var(--u) * 1.2); }
+  .mail-count {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: calc(var(--u) * 5.6);
+    line-height: 0.85;
+  }
+  .mail-count.zero { font-size: calc(var(--u) * 3); line-height: 1; }
+  .mail-word { color: var(--mist); font-size: calc(var(--u) * 2.4); }
+  .mail-boxes { display: flex; column-gap: calc(var(--u) * 1.6); color: var(--haze); margin-left: calc(var(--u) * 1); }
+  .mail-list { list-style: none; margin: calc(var(--u) * 1) 0 0; padding: 0; }
+  .mail-list li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: calc(var(--u) * 1);
+    padding: calc(var(--u) * 0.3) 0 calc(var(--u) * 0.3) calc(var(--u) * 1.8);
+    position: relative;
+  }
+  .mail-list li.fresh::before {
+    content: "";
+    position: absolute; left: 0; top: calc(var(--u) * 1);
+    width: calc(var(--u) * 0.9); height: calc(var(--u) * 0.9);
+    border-radius: 50%; background: var(--sodium);
+  }
+  .m-from { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .m-time { color: var(--haze); font-size: calc(var(--u) * 1.8); white-space: nowrap; }
+  .m-subj { grid-column: 1 / -1; color: var(--mist); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .quiet { color: var(--mist); margin: 0; max-width: 40ch; }
+  .note { color: var(--haze); margin: calc(var(--u) * 1) 0 0; font-size: calc(var(--u) * 1.75); max-width: 48ch; }
+  .note.first { margin: 0 0 calc(var(--u) * 1.2); }
+  .mail .note { margin: calc(var(--u) * 0.6) 0 0; }
+
+  /* ---------- overlays ---------- */
+  #toast {
+    position: fixed;
+    left: 50%; bottom: calc(var(--u) * 2.4);
+    transform: translate(-50%, calc(var(--u) * 16));
+    max-width: calc(var(--u) * 70);
+    padding: calc(var(--u) * 1.6) calc(var(--u) * 2.6);
+    background: var(--bone);
+    color: var(--night);
+    border-radius: calc(var(--u) * 1.2);
+    box-shadow: 0 calc(var(--u) * 1) calc(var(--u) * 4) rgba(5, 10, 20, 0.5);
+    transition: transform 0.6s cubic-bezier(.2, .9, .3, 1.15);
+    display: grid; row-gap: calc(var(--u) * 0.2);
+  }
+  #toast.show { transform: translate(-50%, 0); }
+  #toast strong { font-size: calc(var(--u) * 2.5); }
+  #toast span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  #status {
+    position: fixed; right: calc(var(--u) * 4.2); bottom: calc(var(--u) * 1.4);
+    font-size: calc(var(--u) * 1.6); color: var(--haze);
+  }
+  #dim { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 4s ease; }
+
+  /* portrait screens: stack everything */
+  @media (max-aspect-ratio: 1/1) {
+    :root { --u: min(1.6667vw, 1vh); }
+    #app { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #toast, #app, #dim { transition: none; }
+  }
+</style>
+</head>
+<body>
+<main id="app">
+  <section class="time" aria-label="Time">
+    <div class="date" id="date"></div>
+    <div class="clock">
+      <span id="hm"></span>
+      <span class="clock-side"><span id="sec"></span><span id="ampm"></span></span>
+    </div>
+    <div class="ribbon" id="ribbon" aria-hidden="true"></div>
+  </section>
+  <section class="weather" id="weather" aria-label="Weather"></section>
+  <section class="agenda" id="agenda" aria-label="Upcoming events"></section>
+  <section class="mail" id="mail" aria-label="Unread mail"></section>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="status" role="status"></div>
+<div id="dim"></div>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pad = (n) => String(n).padStart(2, "0");
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+let CFG = { clock_24h: false, show_seconds: false, dim_start: "", dim_end: "", dim_amount: 0.6, chime: true };
+let DATA = null;
+let bootId = null;
+let seenMail = null;            // message ids already shown; null until the first successful check
+const freshUntil = new Map();   // id -> time the "new" dot disappears
+let toastTimer = null;
+let audioCtx = null;
+
+/* ---------- time helpers ---------- */
+function hm(d) {
+  const h = d.getHours(), m = d.getMinutes();
+  if (CFG.clock_24h) return { main: `${pad(h)}:${pad(m)}`, suffix: "" };
+  return { main: `${h % 12 || 12}:${pad(m)}`, suffix: h < 12 ? "am" : "pm" };
+}
+function timeText(d) { const t = hm(d); return t.suffix ? `${t.main} ${t.suffix}` : t.main; }
+function startOfDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+function sameDay(a, b) { return a.toDateString() === b.toDateString(); }
+function dayDiff(d) { return Math.round((startOfDay(d) - startOfDay(new Date())) / 86400000); }
+function dayLabel(d) {
+  const n = dayDiff(d);
+  if (n === 0) return "Today";
+  if (n === 1) return "Tomorrow";
+  return d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" });
+}
+function ago(ts) {
+  if (!ts) return "";
+  const s = Date.now() / 1000 - ts;
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  const d = new Date(ts * 1000);
+  if (sameDay(d, new Date())) return timeText(d);
+  if (s < 6 * 86400) return d.toLocaleDateString(undefined, { weekday: "short" });
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+function untilText(ts) {
+  const mins = Math.round((ts * 1000 - Date.now()) / 60000);
+  if (mins <= 1) return "starting now";
+  if (mins < 60) return `in ${mins} min`;
+  return "";
+}
+function minutesOf(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm || "");
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+function isQuietHours(now = new Date()) {
+  const a = minutesOf(CFG.dim_start), b = minutesOf(CFG.dim_end);
+  if (a === null || b === null || a === b) return false;
+  const t = now.getHours() * 60 + now.getMinutes();
+  return a < b ? t >= a && t < b : t >= a || t < b;
+}
+
+/* ---------- weather icons (drawn, so they work offline) ---------- */
+const WX = {
+  0: ["Clear", "clear"], 1: ["Mostly clear", "partly"], 2: ["Partly cloudy", "partly"], 3: ["Overcast", "cloud"],
+  45: ["Fog", "fog"], 48: ["Freezing fog", "fog"],
+  51: ["Light drizzle", "drizzle"], 53: ["Drizzle", "drizzle"], 55: ["Heavy drizzle", "drizzle"],
+  56: ["Freezing drizzle", "sleet"], 57: ["Freezing drizzle", "sleet"],
+  61: ["Light rain", "rain"], 63: ["Rain", "rain"], 65: ["Heavy rain", "rain"],
+  66: ["Freezing rain", "sleet"], 67: ["Freezing rain", "sleet"],
+  71: ["Light snow", "snow"], 73: ["Snow", "snow"], 75: ["Heavy snow", "snow"], 77: ["Snow grains", "snow"],
+  80: ["Rain showers", "rain"], 81: ["Rain showers", "rain"], 82: ["Heavy showers", "rain"],
+  85: ["Snow showers", "snow"], 86: ["Heavy snow showers", "snow"],
+  95: ["Thunderstorm", "storm"], 96: ["Thunderstorm with hail", "storm"], 99: ["Thunderstorm with hail", "storm"],
+};
+const CLOUD = "M15 35h20.5a7.5 7.5 0 0 0 .6-15A10.5 10.5 0 0 0 16 21.6 6.8 6.8 0 0 0 15 35Z";
+const CLOUD_HIGH = `<path d="${CLOUD}" transform="translate(0 -6)"/>`;
+function sunRays(cx, cy, r1, r2) {
+  let d = "";
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4;
+    d += `M${(cx + r1 * Math.cos(a)).toFixed(1)} ${(cy + r1 * Math.sin(a)).toFixed(1)}L${(cx + r2 * Math.cos(a)).toFixed(1)} ${(cy + r2 * Math.sin(a)).toFixed(1)}`;
+  }
+  return `<path d="${d}"/>`;
+}
+function icon(code, isDay = true) {
+  const kind = (WX[code] || ["", "cloud"])[1];
+  let g = "";
+  switch (kind) {
+    case "clear":
+      g = isDay ? `<circle cx="24" cy="24" r="8"/>${sunRays(24, 24, 12.5, 17)}`
+                : `<path d="M30 9.5A15 15 0 1 0 38.5 30 12 12 0 0 1 30 9.5Z"/>`;
+      break;
+    case "partly":
+      g = (isDay ? `<circle cx="18" cy="17" r="5.5"/>${sunRays(18, 17, 8.5, 11.5)}`
+                 : `<path d="M20 7.5A10 10 0 1 0 26.5 21 8 8 0 0 1 20 7.5Z"/>`)
+        + `<path d="${CLOUD}" transform="translate(3 3)" fill="var(--night)"/>`;
+      break;
+    case "fog":
+      g = `${CLOUD_HIGH}<path d="M10 36h28M14 41h20"/>`;
+      break;
+    case "drizzle":
+      g = `${CLOUD_HIGH}<path d="M18 36v.5M24 39v.5M30 36v.5M21 43v.5M27 43v.5"/>`;
+      break;
+    case "rain":
+      g = `${CLOUD_HIGH}<path d="M18 35l-2 6M25 35l-2 6M32 35l-2 6"/>`;
+      break;
+    case "sleet":
+      g = `${CLOUD_HIGH}<path d="M18 35l-2 6M30 35l-2 6M24 37v.5M24 42v.5"/>`;
+      break;
+    case "snow":
+      g = `${CLOUD_HIGH}<path d="M17 36v.5M24 36v.5M31 36v.5M20.5 41.5v.5M27.5 41.5v.5"/>`;
+      break;
+    case "storm":
+      g = `${CLOUD_HIGH}<path d="M25.5 31l-4.5 7h5l-3 7"/>`;
+      break;
+    default:
+      g = `<path d="${CLOUD}"/>`;
+  }
+  return `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${g}</svg>`;
+}
+
+/* ---------- rendering ---------- */
+function renderClock(now) {
+  const t = hm(now);
+  $("#hm").textContent = t.main;
+  $("#ampm").textContent = t.suffix;
+  $("#sec").textContent = CFG.show_seconds ? pad(now.getSeconds()) : "";
+  $("#date").textContent = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+}
+
+function renderRibbon() {
+  const now = new Date();
+  const dayStart = startOfDay(now);
+  const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
+  const pos = (t) => clamp(((t - dayStart) / (dayEnd - dayStart)) * 100, 0, 100);
+  let html = `<div class="rb-track"></div>`;
+  let sunUp = false;
+
+  const w = DATA?.weather?.data;
+  if (w?.sunrise && w?.sunset) {
+    const sr = new Date(w.sunrise), ss = new Date(w.sunset);
+    if (sameDay(sr, now)) {
+      html += `<div class="rb-day" style="left:${pos(sr)}%;width:${pos(ss) - pos(sr)}%"></div>`;
+      html += `<span class="rb-label" style="left:${pos(sr)}%">Sunrise ${esc(timeText(sr))}</span>`;
+      html += `<span class="rb-label" style="left:${pos(ss)}%">Sunset ${esc(timeText(ss))}</span>`;
+      sunUp = now >= sr && now < ss;
+    }
+  }
+  html += `<div class="rb-past" style="width:${pos(now)}%"></div>`;
+  for (const h of [6, 12, 18]) html += `<div class="rb-tick" style="left:${(h / 24) * 100}%"></div>`;
+
+  for (const e of DATA?.calendar?.data?.events || []) {
+    if (e.all_day) continue;
+    const s = new Date(e.start * 1000), f = new Date(e.end * 1000);
+    if (f <= dayStart || s >= dayEnd) continue;
+    html += `<div class="rb-event" style="left:${pos(s)}%;width:${Math.max(0, pos(f) - pos(s))}%"></div>`;
+  }
+  html += `<div class="rb-now${sunUp ? " sun" : ""}" style="left:${pos(now)}%"></div>`;
+  $("#ribbon").innerHTML = html;
+}
+
+function renderWeather() {
+  const el = $("#weather");
+  const w = DATA?.weather;
+  if (!w || !w.enabled) { el.innerHTML = `<p class="quiet">Add your latitude and longitude to config.ini to see the weather here.</p>`; return; }
+  const d = w.data;
+  if (!d) { el.innerHTML = `<p class="quiet">${w.error ? "Weather isn't available right now. Trying again shortly." : "Getting the forecast…"}</p>`; return; }
+
+  const [cond] = WX[d.code] || ["—"];
+  const today = d.days[0] || {};
+  const details = [`Feels like ${d.feels}°`, `Wind ${d.wind} ${d.wind_unit}`];
+  if (today.high != null) details.unshift(`High ${today.high}°`, `Low ${today.low}°`);
+  if (today.precip >= 20) details.push(`${today.precip}% chance of rain`);
+
+  const days = d.days.slice(1, 5).map((x) => {
+    const date = new Date(`${x.date}T12:00`);
+    return `<li><span class="d">${esc(date.toLocaleDateString(undefined, { weekday: "short" }))}</span>${icon(x.code, true)}<span class="t">${x.high}°<span>${x.low}°</span></span></li>`;
+  }).join("");
+
+  el.innerHTML = `
+    <div class="wx-now">${icon(d.code, d.is_day)}<div class="wx-temp">${d.temp}°</div></div>
+    <div class="wx-cond">${esc(cond)}${d.location ? ` in ${esc(d.location)}` : ""}</div>
+    <div class="wx-detail">${details.map((t) => `<span>${esc(t)}</span>`).join("")}</div>
+    <ol class="wx-days">${days}</ol>
+    ${w.error ? `<p class="note">Couldn't refresh the forecast. Showing the last one.</p>` : ""}`;
+}
+
+function renderAgenda() {
+  const el = $("#agenda");
+  const c = DATA?.calendar;
+  if (!c || !c.enabled) { el.innerHTML = `<p class="quiet">Add a calendar link to config.ini to see your upcoming events here.</p>`; return; }
+  if (!c.data) { el.innerHTML = `<p class="quiet">${c.error ? `Your calendar isn't available: ${esc(c.error)}` : "Loading your calendar…"}</p>`; return; }
+
+  const nowS = Date.now() / 1000;
+  const todayStart = startOfDay(new Date()).getTime() / 1000;
+  const events = c.data.events.filter((e) => e.end > nowS);
+  const nextTimed = events.find((e) => !e.all_day && e.start > nowS);
+
+  const groups = new Map();
+  for (const e of events) {
+    const shownOn = new Date(Math.max(e.start, todayStart) * 1000);
+    const key = startOfDay(shownOn).getTime();
+    if (!groups.has(key)) groups.set(key, { date: shownOn, items: [] });
+    groups.get(key).items.push(e);
+  }
+
+  let html = "";
+  for (const { date, items } of groups.values()) {
+    const later = dayDiff(date) > 0;
+    html += `<div class="day${later ? " later" : ""}"><h2>${esc(dayLabel(date))}</h2>`;
+    for (const e of items) {
+      const start = new Date(e.start * 1000), end = new Date(e.end * 1000);
+      const ongoing = !e.all_day && e.start <= nowS;
+      let when = e.all_day ? "All day" : ongoing ? "Now" : timeText(start);
+      let extra = "";
+      if (ongoing) extra = `until ${timeText(end)}`;
+      else if (e === nextTimed) extra = untilText(e.start);
+      html += `<div class="ev${ongoing ? " now" : ""}">
+        <span class="when">${esc(when)}</span>
+        <span class="what">${esc(e.title)}${e.location ? `<span class="where">${esc(e.location)}</span>` : ""}</span>
+        <span class="soon">${esc(extra)}</span></div>`;
+    }
+    html += `</div>`;
+  }
+  if (!events.length) html = `<p class="quiet">Nothing on your calendar for the next ${c.data.days || 7} days.</p>`;
+  // Problems go first: the bottom of this panel fades out.
+  const errors = (c.data.errors || []).map((err) => `<p class="note first">${esc(err)}</p>`).join("");
+  el.innerHTML = errors + html;
+}
+
+function renderMail() {
+  const el = $("#mail");
+  const m = DATA?.mail;
+  if (!m || !m.enabled) { el.innerHTML = `<p class="quiet">Add a mailbox to config.ini to see unread mail here.</p>`; return; }
+  const d = m.data;
+  if (!d) { el.innerHTML = `<p class="quiet">${m.error ? `Mail isn't available: ${esc(m.error)}` : "Checking your mail…"}</p>`; return; }
+
+  const now = Date.now();
+  const okBoxes = d.boxes.filter((b) => !b.error);
+  const boxes = d.boxes.length > 1 && okBoxes.length
+    ? `<span class="mail-boxes">${okBoxes.map((b) => `<span>${esc(b.name)} ${b.unread}</span>`).join("")}</span>` : "";
+  const head = d.total
+    ? `<div class="mail-head"><span class="mail-count">${d.total}</span><span class="mail-word">unread</span>${boxes}</div>`
+    : `<div class="mail-head"><span class="mail-count zero">No unread mail</span></div>`;
+  const list = d.messages.map((x) => `
+    <li class="${(freshUntil.get(x.id) || 0) > now ? "fresh" : ""}">
+      <span class="m-from">${esc(x.from)}</span><span class="m-time">${esc(ago(x.ts))}</span>
+      <span class="m-subj">${esc(x.subject)}</span>
+    </li>`).join("");
+  const errors = d.boxes.filter((b) => b.error).map((b) => `<p class="note">${esc(b.name)}: ${esc(b.error)}</p>`).join("");
+  el.innerHTML = head + errors + (list ? `<ul class="mail-list">${list}</ul>` : "");
+}
+
+/* ---------- new mail ---------- */
+function checkForNewMail() {
+  const msgs = DATA?.mail?.data?.messages;
+  if (!msgs) return;
+  if (seenMail === null) { seenMail = new Set(msgs.map((m) => m.id)); return; }  // first check: no alert
+  const fresh = msgs.filter((m) => !seenMail.has(m.id));
+  msgs.forEach((m) => seenMail.add(m.id));
+  if (!fresh.length) return;
+  const until = Date.now() + 30 * 60 * 1000;
+  fresh.forEach((m) => freshUntil.set(m.id, until));
+  showToast(
+    fresh.length === 1 ? `New email from ${fresh[0].from}` : `${fresh.length} new emails`,
+    fresh.length === 1 ? fresh[0].subject : `Latest from ${fresh[0].from}: ${fresh[0].subject}`
+  );
+  if (CFG.chime && !isQuietHours()) chime();
+}
+
+function showToast(title, body) {
+  const t = $("#toast");
+  t.innerHTML = `<strong>${esc(title)}</strong><span>${esc(body)}</span>`;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 30000);
+}
+
+function chime() {
+  try {
+    audioCtx = audioCtx || new AudioContext();
+    const t0 = audioCtx.currentTime + 0.05;
+    [659.25, 987.77].forEach((freq, i) => {
+      const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      const t = t0 + i * 0.2;
+      osc.type = "sine"; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.18, t + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t); osc.stop(t + 1.5);
+    });
+  } catch (e) { /* no audio device: stay silent */ }
+}
+
+/* ---------- loops ---------- */
+function renderMinute() {
+  renderRibbon(); renderAgenda(); renderMail();
+  $("#dim").style.opacity = isQuietHours() ? CFG.dim_amount : 0;
+}
+
+async function poll() {
+  try {
+    const r = await fetch("/api/all", { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    const j = await r.json();
+    if (bootId && j.boot_id !== bootId) { location.reload(); return; }  // server restarted: pick up changes
+    bootId = j.boot_id;
+    DATA = j; CFG = j.config;
+    $("#status").textContent = "";
+    checkForNewMail();
+    renderWeather(); renderMinute(); renderClock(new Date());
+  } catch (e) {
+    $("#status").textContent = "Can't reach the clock service. Retrying…";
+  }
+}
+
+let lastMinute = -1;
+function tick() {
+  const now = new Date();
+  renderClock(now);
+  if (now.getMinutes() !== lastMinute) { lastMinute = now.getMinutes(); renderMinute(); }
+  setTimeout(tick, 1000 - now.getMilliseconds() + 10);
+}
+
+// Nudge the layout a few pixels every 10 minutes so nothing sits in one spot for days.
+setInterval(() => {
+  const r = () => Math.round(Math.random() * 8 - 4);
+  $("#app").style.transform = `translate(${r()}px, ${r()}px)`;
+}, 10 * 60 * 1000);
+
+tick();
+poll();
+setInterval(poll, 30000);
+</script>
+</body>
+</html>
