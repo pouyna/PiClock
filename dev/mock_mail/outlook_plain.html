@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mail - Pouyan Navab - Outlook</title>
+<!-- A plainer shape of Outlook's message list: rows with role=option and an accessible name but
+     no data-convid, no tooltips, and no listbox ancestor; sender, subject and time as plain text
+     lines; unread shown by bold text or by "Unread" in the accessible name. Sample names only. -->
+<style>.unread div { font-weight: 700; }</style>
+</head>
+<body>
+<div aria-label="Message list" role="region">
+  <div role="presentation">
+    <div role="option" aria-label="Priya Raman Re: Saturday hike, still on? 9:12 AM" class="unread" data-list-index="0">
+      <div>Priya Raman</div><div>Re: Saturday hike, still on?</div><div>Are we still meeting at 8?</div><div>9:12 AM</div>
+    </div>
+    <div role="option" aria-label="Dana Whitfield Q4 planning doc Yesterday" data-list-index="1">
+      <div>Dana Whitfield</div><div>Q4 planning doc</div><div>Here is the draft.</div><div>Yesterday</div>
+    </div>
+    <div role="option" aria-label="Unread Facilities Parking garage closed Monday Mon 10/19" data-list-index="2">
+      <span>Unread</span><div>Facilities</div><div>Parking garage closed Monday</div><div>Mon 10/19</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

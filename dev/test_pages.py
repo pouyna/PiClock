@@ -113,6 +113,16 @@ def test_outlook_reader_takes_the_unread_rows(browser):
     assert r["messages"][1]["when"] == "Mon 10/19"
 
 
+def test_outlook_reader_copes_without_tooltips_or_ids(browser):
+    r = read_mock(browser, "outlook_plain.html", "PiClockReaders.pick('outlook.office.com').read(document, {hostname: 'outlook.office.com', hash: ''})")
+    assert [(m["from"], m["subject"], m["when"]) for m in r["messages"]] == [("Priya Raman", "Re: Saturday hike, still on?", "9:12 AM"), ("Facilities", "Parking garage closed Monday", "Mon 10/19")]
+    assert [m["id"] for m in r["messages"]] == ["0", "2"] and r["unread"] == 2
+    sample = read_mock(browser, "outlook_plain.html", "document.querySelector(PiClockReaders.ROW_SELECTOR).getAttribute('data-list-index')")
+    assert sample == "0"
+    d = read_mock(browser, "gmail.html", "PiClockReaders.describe(document)")
+    assert d["roles"] == {} and d["frames"] == [] and d["list"] == ""
+
+
 def test_gmail_reader_uses_the_title_count_and_thread_ids(browser):
     r = read_mock(browser, "gmail.html", "PiClockReaders.pick('mail.google.com').read(document, {hostname: 'mail.google.com', hash: '#inbox'})")
     assert r["provider"] == "Gmail" and r["account"] == "pouyan@gmail.com" and r["unread"] == 2

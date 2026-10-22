@@ -39,28 +39,63 @@ const PiClockReaders = (() => {
     const t = when(timeEl);
     return { id: tidy(id), from: tidy(from), subject: tidy(subject), ts: t.ts, when: t.when };
   }
+  function leaves(row) {   // the row's visible text, one entry per text node, with the element that holds it
+    const out = [];
+    const walker = row.ownerDocument.createTreeWalker(row, 4 /* NodeFilter.SHOW_TEXT */);
+    let node;
+    while ((node = walker.nextNode())) {
+      const t = tidy(node.nodeValue);
+      if (t) out.push({ text: t, el: node.parentElement });
+    }
+    return out;
+  }
 
-  // Outlook on the web: outlook.office.com (work and school), outlook.live.com (personal).
-  // Each conversation is a [role=option] row; the sender, subject and time are spans with
-  // tooltips (title). Unread rows say "unread" in their accessible name or are set in bold.
+  // Outlook on the web: outlook.office.com (work and school, such as UIC), outlook.live.com
+  // (personal), outlook.cloud.microsoft (the newer address). Each conversation is a row with
+  // role=option (older builds carry data-convid). The sender, subject and time are usually
+  // spans with tooltips; when they aren't, the row's text lines are taken in order. Unread
+  // rows say "unread" in their accessible name, or are set in bold.
+  const OUTLOOK_ROWS = ['[role="option"][data-convid]', '[data-convid]', '[role="listbox"] [role="option"]', '[role="option"][aria-label]'];
+  function outlookRows(doc) {
+    for (const s of OUTLOOK_ROWS) {
+      const rows = Array.from(doc.querySelectorAll(s));
+      if (rows.length) return rows;
+    }
+    // A list named "Message list" (or similar) whatever role it uses, and whatever its rows are called.
+    const lists = Array.from(doc.querySelectorAll("[aria-label]")).filter((el) => /message list|messages|inbox/i.test(attr(el, "aria-label")));
+    for (const list of lists) {
+      const rows = Array.from(list.querySelectorAll('[role="option"], [role="row"], [role="listitem"], [role="treeitem"], [role="gridcell"]'));
+      if (rows.length) return rows;
+    }
+    return [];
+  }
   function outlook(doc, loc) {
     if (/^login\./.test(loc.hostname)) return { provider: "Outlook", needs_login: true };
-    let rows = Array.from(doc.querySelectorAll('[role="option"][data-convid], [role="option"][data-item-id]'));
-    if (!rows.length) rows = Array.from(doc.querySelectorAll('[role="listbox"] [role="option"]'));
+    const rows = outlookRows(doc);
     if (!rows.length) return null;
     const messages = [];
     for (const row of rows) {
       if (messages.length >= MAX) break;
       const spans = Array.from(row.querySelectorAll("span[title], span[aria-label]"));
-      const senderEl = spans.find((s) => EMAIL.test(attr(s, "title")) || EMAIL.test(attr(s, "aria-label"))) || null;
-      const timeEl = spans.find((s) => s !== senderEl && TIME_TEXT.test(text(s))) || row.querySelector("time") || null;
-      const subjectEl = spans.find((s) => s !== senderEl && s !== timeEl && text(s).length > 0) || null;
+      let senderEl = spans.find((s) => EMAIL.test(attr(s, "title")) || EMAIL.test(attr(s, "aria-label"))) || null;
+      let timeEl = spans.slice().reverse().find((s) => s !== senderEl && TIME_TEXT.test(text(s))) || row.querySelector("time") || null;
+      let subjectEl = spans.find((s) => s !== senderEl && s !== timeEl && text(s).length > 0) || null;
+      let from = text(senderEl) || attr(senderEl, "title");
+      let subject = text(subjectEl) || attr(subjectEl, "title");
+      if (!from || !subject) {   // no tooltips: the row's text lines, in the order the page shows them
+        const lines = leaves(row).filter((l) => !/^(unread|read)$/i.test(l.text));
+        const timeLine = lines.slice().reverse().find((l) => TIME_TEXT.test(l.text)) || null;
+        const rest = lines.filter((l) => l !== timeLine);
+        if (!timeEl && timeLine) timeEl = timeLine.el;
+        if (!from && rest[0]) { from = rest[0].text; senderEl = senderEl || rest[0].el; }
+        if (!subject && rest[1]) { subject = rest[1].text; subjectEl = subjectEl || rest[1].el; }
+      }
       const label = attr(row, "aria-label");
-      const unread = /\bunread\b/i.test(label) || bold(senderEl) || bold(subjectEl) || !!row.querySelector('[title="Mark as read"], [aria-label="Mark as read"]');
+      const unread = /\bunread\b/i.test(label) || bold(senderEl) || bold(subjectEl)
+        || !!row.querySelector('[title="Mark as read"], [aria-label="Mark as read"], [aria-label*="unread" i]');
       if (!unread) continue;
-      const from = text(senderEl) || attr(senderEl, "title") || tidy(label.split(",")[0]);
-      const subject = text(subjectEl) || attr(subjectEl, "title");
-      messages.push(message(attr(row, "data-convid") || attr(row, "data-item-id") || row.id, from, subject, timeEl));
+      if (!from) from = tidy(label.split(",")[0]);
+      messages.push(message(attr(row, "data-convid") || attr(row, "data-item-id") || row.id || attr(row, "data-list-index"), from, subject, timeEl));
     }
     const me = doc.querySelector('#O365_MainLink_Me, [id$="MainLink_Me"], button[aria-label*="Account manager"]');
     const account = accountFrom(doc.title, attr(me, "aria-label"), attr(me, "title"));
@@ -111,16 +146,29 @@ const PiClockReaders = (() => {
     return { provider: provider || loc.hostname.replace(/^(www|mail|app)\./, ""), account: loc.hostname, unread, messages: [] };
   }
 
+  // What a page looks like, for the popup's troubleshooting sample when a reader finds nothing.
+  function describe(doc) {
+    const roles = {};
+    doc.querySelectorAll("[role]").forEach((el) => { const r = attr(el, "role"); roles[r] = (roles[r] || 0) + 1; });
+    const labelled = Array.from(doc.querySelectorAll("[aria-label]"))
+      .filter((el) => /message|inbox|list|mail/i.test(attr(el, "aria-label"))).slice(0, 20)
+      .map((el) => `${el.tagName.toLowerCase()} role=${attr(el, "role") || "-"} aria-label="${attr(el, "aria-label").slice(0, 70)}" children=${el.children.length}`);
+    const frames = Array.from(doc.querySelectorAll("iframe")).map((f) => (f.src || "").slice(0, 100));
+    const list = Array.from(doc.querySelectorAll("[aria-label]")).find((el) => /message list/i.test(attr(el, "aria-label")));
+    return { roles, labelled, frames, list: list ? list.outerHTML.slice(0, 5000) : "" };
+  }
+
   const READERS = [
-    { name: "Outlook", test: (h) => /(^|\.)outlook\.(office|office365|live)\.com$/.test(h) || /^login\.(microsoftonline|live)\.com$/.test(h), read: outlook },
+    { name: "Outlook", test: (h) => /(^|\.)outlook\.(office|office365|live)\.com$/.test(h) || /^outlook\.cloud\.microsoft$/.test(h) || /^login\.(microsoftonline|live)\.com$/.test(h), read: outlook },
     { name: "Gmail", test: (h) => h === "mail.google.com", read: gmail },
     { name: "Yahoo", test: (h) => /(^|\.)mail\.yahoo\.com$/.test(h), read: yahoo },
     { name: "iCloud", test: (h) => /(^|\.)icloud\.com$/.test(h), read: (d, l) => generic(d, l, "iCloud") },
   ];
   const GENERIC = { name: "Generic", test: () => true, read: (d, l) => generic(d, l) };
+  const ROW_SELECTOR = OUTLOOK_ROWS.join(", ") + ', tr.zA, [data-test-id="message-list-item"]';
 
   function pick(hostname) { return READERS.find((r) => r.test(hostname)) || GENERIC; }
   function read(doc, loc) { return pick(loc.hostname).read(doc, loc); }
-  return { pick, read, readers: READERS };
+  return { pick, read, readers: READERS, describe, ROW_SELECTOR };
 })();
 if (typeof module !== "undefined") module.exports = PiClockReaders;

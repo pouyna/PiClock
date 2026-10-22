@@ -56,7 +56,8 @@ async function copySample() {
   if (!tab) return;
   try {
     const r = await chrome.tabs.sendMessage(tab.id, { type: "sample" });
-    await navigator.clipboard.writeText(`PiClock mail sample\nreader: ${r.reader}\ntitle: ${r.title}\nurl: ${r.url}\n\n${r.sample}`);
+    const page = r.page ? `\n\nroles on the page: ${JSON.stringify(r.page.roles)}\nlabelled parts:\n${r.page.labelled.join("\n")}\nframes: ${r.page.frames.join(" ")}\n\n${r.page.list}` : "";
+    await navigator.clipboard.writeText(`PiClock mail sample\nreader: ${r.reader} (${r.frame})\ntitle: ${r.title}\nurl: ${r.url}\n\n${r.sample}${page}`);
     say("Copied a sample of the mail list. Paste it to whoever maintains the reader; it contains your mail text.");
   } catch (err) {
     say("Couldn't read this tab.");

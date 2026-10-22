@@ -44,8 +44,9 @@
       return true;
     }
     if (msg.type === "sample") {
-      const row = document.querySelector('[role="option"][data-convid], [role="listbox"] [role="option"], tr.zA, [data-test-id="message-list-item"]');
-      respond({ reader: reader.name, title: document.title, url: location.href, sample: row ? row.outerHTML.slice(0, 6000) : "(no mail list found in this frame)" });
+      const row = document.querySelector(PiClockReaders.ROW_SELECTOR);
+      respond({ reader: reader.name, title: document.title, url: location.href, frame: window === window.top ? "top" : "child frame",
+                sample: row ? row.outerHTML.slice(0, 6000) : "(no mail row found in this frame)", page: row ? null : PiClockReaders.describe(document) });
       return false;
     }
     return false;
