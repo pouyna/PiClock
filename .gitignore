@@ -1,9 +1,11 @@
 # Your settings and passwords stay on the Pi and never go to GitHub
 config.ini
 
-# Created on the Pi by install.sh and the updater
+# Created on the Pi by install.sh, the updater, and the Claude status reports
 .venv/
 .update-skip
+.screen-hidden
+claude/
 __pycache__/
 *.pyc
 

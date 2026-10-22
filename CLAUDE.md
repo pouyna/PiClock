@@ -1,6 +1,6 @@
 # PiClock
 
-PiClock is a full-screen clock for a Raspberry Pi: a big clock, weather, upcoming calendar events and unread email, with a new-mail alert and chime, overnight dimming, and self-updating from GitHub. Built in a claude.ai conversation and handed over to Claude Code.
+PiClock is a full-screen clock for a Raspberry Pi touchscreen: a big clock, weather, upcoming calendar events and unread email, with a new-mail alert and chime, overnight dimming, an on-screen settings page with encrypted secrets, a hide button that frees the desktop, a light that shows what Claude Code on the PC is doing, and self-updating from GitHub. Built in a claude.ai conversation and handed over to Claude Code on 2026-10-21.
 
 ## The owner
 
@@ -12,7 +12,7 @@ Uses a Windows PC with PowerShell. Wants things straightforward: as few commands
 - **GitHub**: `pouyna/PiClock`, public, the master copy. Pushing to `main` deploys: the Pi installs it within 10 minutes.
 - **The Pi**: `pi@raspberrypi.local`, a Raspberry Pi 4 Model B (8 GB) running Raspberry Pi OS with desktop (Debian 13 "trixie", labwc on Wayland), 10" 1280×800 HDMI screen, time zone America/Chicago. App at `/home/pi/piclock` (a git clone).
 
-Status on 2026-10-21: the project was renamed from "Desk Clock" to PiClock, the GitHub repo was created and pushed, and key-based SSH from this PC works. Nothing is installed on the Pi yet; the owner runs the install line from README.md. Check before assuming: `git remote -v` here, and `ssh pi@raspberrypi.local piclock status` for the Pi.
+Status on 2026-10-21: renamed from "Desk Clock" to PiClock, pushed, installed on the Pi by the owner and running on screen. The same evening the touch features, the hide button, the Settings page with encryption and the Claude light were added. Check before assuming: `git remote -v` here, and `ssh pi@raspberrypi.local piclock status` for the Pi.
 
 ## Working with the Pi
 
@@ -27,16 +27,21 @@ Status on 2026-10-21: the project was renamed from "Desk Clock" to PiClock, the 
 
 | File | Role |
 |---|---|
-| `app.py` | Flask server on the Pi (waitress if installed). One background `Poller` thread per source (weather, mail, calendar) keeps the last result. `GET /api/all` returns `{boot_id, config, weather, mail, calendar}`, each source as `{enabled, data, error, updated}`. `GET /api/health` for checks. |
-| `static/index.html` | The whole screen: one file, vanilla JS, no build step. Polls `/api/all` every 30 s, ticks the clock locally every second, reloads itself when `boot_id` changes (so every server restart pushes new code to the screen). |
-| `static/fonts/` | Bundled fonts (OFL). The page makes no requests to the internet. |
-| `piclock` | Bash control command: `status`, `update`, `config`, `restart`, `logs`, `show`, `hide`. Also the updater. |
+| `app.py` | Flask server on the Pi (waitress if installed). One background `Poller` thread per source (weather, mail, calendar) keeps the last result; after a failure it retries in a minute, doubling up to the normal interval. `GET /api/all` returns `{boot_id, config, weather, mail, calendar, claude, screen}`, each source as `{enabled, data, error, updated}`. `GET /api/health` for checks. Local-only (`request.remote_addr` must be the loopback address, even when `host = 0.0.0.0`): `POST /api/screen` (`{"action": "hide"|"show"}`), `GET /settings`, `GET/POST /api/settings`, `POST /api/settings/check`. A settings save rewrites config.ini and re-executes the process (`os.execv`), so systemd sees the same service and no sudo is needed. At startup it encrypts any plain secrets in config.ini and writes the desktop launcher files. |
+| `static/index.html` | The whole clock screen: one file, vanilla JS, no build step. Polls `/api/all` every 30 s, ticks the clock locally every second, reloads itself when `boot_id` changes (so every server restart pushes new code to the screen). Touch: tap the alert to dismiss, tap the agenda or mail to page through them, tap at night to brighten, a corner button for Settings and Hide, a light at the bottom left for Claude. Everything a tap changes reverts by itself within a minute. |
+| `static/settings.html` | The Settings screen, drawn from `GET /api/settings` (no secret ever reaches the page, only "set" / "not set"). Toggles, steppers, segmented choices, and an on-screen keyboard of its own, because Chromium on Wayland doesn't open the Pi's keyboard. Returns to the clock after 4 idle minutes. |
+| `settings.py` | `SCHEMA` (every setting the page shows), `describe()` for the page, `apply()` that checks the form and rewrites config.ini in place while keeping its comments, `encrypt_in_place()` at startup. |
+| `vault.py` | Fernet encryption for mail passwords and calendar links (`enc:` prefix). Key in `~/.config/piclock/secret.key`, made on first use, outside the repo. Plain values pass through `decrypt()`, so old files keep working. |
+| `claude_status.py` | The Claude sessions reported by the PC: one JSON file per session in `claude/` (gitignored), `receive()` for `piclock claude`, `sessions()` and `light()` for the API. States `limit`, `attention`, `working`, `done`, `idle`, in that order of importance; `ended` removes a session. |
+| `pc/claude_status_hook.py` | Runs on the PC as a Claude Code hook. Maps hook events to states, rate-limits heartbeats to one a minute, sends the report with `ssh pi@raspberrypi.local piclock claude`. Prints nothing, exits 0, has its own deadline. `pc/hooks.example.json` is the settings block that registers it. |
+| `static/fonts/`, `static/icon.svg` | Bundled fonts (OFL) and the launcher icon. The pages make no requests to the internet. |
+| `piclock` | Bash control command: `status`, `update`, `config`, `restart`, `logs`, `show`, `hide`, `claude` (reads one report from stdin). Also the updater. |
 | `install.sh` | Idempotent installer, run as the normal user (refuses root, uses sudo inside). Creates `.venv`, `config.ini` (from the example, chmod 600), the systemd units, `/usr/local/bin/piclock` launcher, the autostart entry, desktop autologin and no screen blanking. |
 | `kiosk.sh` | Waits for `/api/health`, then starts Chromium in kiosk mode. Only one copy at a time. |
 | `config.example.ini` | Every setting, with comments. Real settings live in `config.ini` on the Pi only. |
 | `dev/` | Tests and preview tools (see Testing). Deployed to the Pi too, harmlessly. |
 
-Created on the Pi by `install.sh`: `piclock.service` (runs app.py as the owner, `Restart=on-failure`), `piclock-update.service` + `.timer` (every 10 min, runs `piclock update --auto` as root), `~/.config/autostart/piclock.desktop`.
+Created on the Pi by `install.sh`: `piclock.service` (runs app.py as the owner, `Restart=on-failure`), `piclock-update.service` + `.timer` (every 10 min, runs `piclock update --auto` as root), `~/.config/autostart/piclock.desktop`. Created by app.py itself: `~/Desktop/PiClock.desktop` and `~/.local/share/applications/piclock.desktop` (bring a hidden clock back by touch), `~/.config/piclock/secret.key`, `~/piclock/claude/`.
 
 Data sources: Open-Meteo (no key; `timezone=auto`, so sunrise/sunset are local times without an offset), IMAP over SSL with app passwords, any iCal (.ics) links (`webcal://` becomes `https://`).
 
@@ -58,6 +63,12 @@ Changes to `install.sh` are not applied automatically: the updater only prints a
 8. Error text says what's wrong and how to fix it, pointing at `config.ini` or a `piclock` command. No apologies, no stack traces on screen.
 9. Keep the Pi side light: no build step, no Node, no extra services. It may be an older Pi.
 10. After changing `piclock` or `install.sh`, run `dev/test_update.sh` before pushing. A broken updater can strand the Pi.
+11. Secrets never leave the Pi through the API: `/api/settings` reports only whether a password is set and labels a calendar link by host and position (for iCloud the path *is* the secret), and error text never contains one. Settings, the mailbox check and the hide button answer only to the loopback address and only to JSON bodies. The mailbox check reuses a stored password only for the same server and username it was saved for. IMAP always verifies the server certificate (`ssl.create_default_context()`).
+12. The hook on the PC must never interfere with Claude Code: no stdout, exit 0 always, a deadline on everything (stdin read and ssh). Keep it stdlib-only so `py -I` runs it anywhere.
+13. The Claude light is the one place with colours outside the palette, because the owner asked for green/blue/yellow/red. Don't let them spread.
+14. Touch targets are at least 4.6 `--u` tall, every tap effect reverts by itself, and the hide action needs two taps (corner button, then Hide) so a wipe of the screen can't close the clock.
+15. Anything the service starts on the screen must not live in the service's cgroup, or the next `systemctl restart piclock` (every update) kills it: `cmd_show` starts the kiosk with `systemd-run --user`, falling back to `nohup`. The hidden state is kept in `.screen-hidden` so a restart doesn't lose the return timer.
+16. Settings validation is the last line between the screen and a service that can't start: whole-number fields reject fractions and `nan`, section headers are matched the way configparser reads them, and every rewrite of config.ini is parsed before it replaces the file. The server reads whole-number settings through `cfg_int()`, which falls back to the default instead of raising.
 
 ## Testing (run before every push)
 
@@ -68,9 +79,9 @@ py -m venv .venv
 .venv\Scripts\playwright install chromium
 ```
 
-- `pytest dev`: backend tests covering config parsing, calendar (recurring, all-day, time zones, cancelled, errors that hide URLs), mail (read-only, encoded headers, sign-in and network errors), weather, and the API. 14 tests.
-- `python dev/screenshot.py`: renders the real page with sample data at 800×480, 1024×600, 1920×1080 and 720×1280 portrait, plus the new-mail alert, 24-hour mode, not-set-up and error states, into `dev/screenshots/` (gitignored). Open and look at them after every change to `static/index.html`; text clipping and overflow at 800×480 is the usual failure.
-- `python dev/mock_server.py` (`--24h`, `--empty`, `--errors`): live preview at http://127.0.0.1:8099. Visit `/new-mail` to trigger an alert.
+- `pytest dev`: 65 tests. `test_backend.py` covers config parsing, calendar, mail, weather and the API; `test_features.py` the Claude sessions and light, the hide endpoint, weather 5xx wording and the retry delay; `test_settings.py` the vault, `describe()`, `apply()` (comments kept, mailboxes added, renamed, removed, encrypted), `encrypt_in_place()` and the settings API; `test_hook.py` the PC hook's event mapping and heartbeat rate limit.
+- `python dev/screenshot.py`: renders the real pages with sample data at 800×480, 1024×600, 1920×1080 and 720×1280 portrait, plus the new-mail alert, the tap states (mail, agenda, hide sheet, light sheet), no light, 24-hour mode, not-set-up and error states, and the Settings page with its keyboard, into `dev/screenshots/` (gitignored). Open and look at them after every change to the pages; text clipping and overflow at 800×480 is the usual failure.
+- `python dev/mock_server.py` (`--24h`, `--empty`, `--errors`, `--no-claude`, `--light red`): live preview at http://127.0.0.1:8099, with `/settings` served from `config.example.ini`. Visit `/new-mail` to trigger an alert.
 - `dev/test_update.sh`: fake GitHub plus fake Pi covering good update, broken update and rollback, no retry, a fix with a package change, config safety, and auto-updates off. 18 checks; about a minute. It needs Linux root. This PC has no WSL distro, so run it in Docker: start Docker Desktop, wait for it, then run this from PowerShell (it passed on 2026-10-21 in a Debian 13 container, the Pi's OS family):
   ```
   docker run --rm -v C:/Users/Pouyan/Desktop/PiClock:/src:ro python:3.13-slim bash -c "apt-get update -qq >/dev/null && apt-get install -y -qq git curl procps >/dev/null && mkdir /work && cd /src && tar --exclude=.venv --exclude=.git --exclude=dev/screenshots -cf - . | tar -xf - -C /work && cd /work && pip install -q -r requirements.txt && bash dev/test_update.sh"
@@ -89,6 +100,7 @@ The look: a night-sky screen readable from across a room, calm enough for a bedr
 - Copy: sentence case, plain words, active voice. No all-caps labels, no labels above content that doesn't need them, no "·" separators.
 - Motion: only the new-mail alert (slides up from the bottom so it never covers the time) and the overnight dim fade. Respect `prefers-reduced-motion`.
 - Running 24/7: the layout nudges a few pixels every 10 minutes; the chime stays silent while the screen is dimmed.
+- Touch: two quiet corner controls only, the light bottom left and the arrow bottom right; sheets are bone cards like the alert. The Settings page keeps the same palette and type, with bone for the one primary action per screen.
 
 ## Lessons learned (each one bit once)
 
@@ -98,6 +110,13 @@ The look: a night-sky screen readable from across a room, calm enough for a bedr
 - Chromium blocks sound without a click unless started with `--autoplay-policy=no-user-gesture-required` (in `kiosk.sh`).
 - Open-Meteo times and the calendar both rely on the Pi's time zone being set correctly (`raspi-config` → Localisation).
 - Outlook.com has been removing password sign-in for IMAP; OAuth isn't implemented, so Outlook mail may not work.
+- Claude Code hooks: `"async": true` keeps a hook from blocking, but then no timeout applies, so the script needs its own deadline; stdin may not always be closed, so read it with a deadline too. Exit code 2 or stdout on UserPromptSubmit/Stop changes Claude's behaviour, so the hook prints nothing and exits 0.
+- A heartbeat stamp must carry the report time explicitly (`os.utime`), not the file's natural mtime, or tests with a fake clock lie.
+- `sudo` on this Pi needs a password, so the service restarts itself with `os.execv` after a settings save instead of `systemctl restart`. Python closes its sockets on exec, so the port is free again at once. A port change makes the Settings page navigate to the new port after a pause, because it can't poll a different origin.
+- configparser accepts `[section] trailing text` and `[Email: Personal]`; a header regex anchored at the end of the line missed them and `set_value` appended a duplicate section. Mirror configparser (`^\s*\[(.+)\]`) and compare names normalised.
+- `imaplib.IMAP4_SSL` without `ssl_context` does not verify certificates. Always pass `ssl.create_default_context()`.
+- The adversarial review of 2026-10-21 (five reviewers, two refuters per finding) ran into the owner's Claude usage limit; keep fan-outs small, as the memory file already said.
+- The Bash tool on this PC truncates commands longer than about 8k characters; long edit scripts go in a file first.
 
 ## What has been checked on the real Pi
 
@@ -108,15 +127,20 @@ Seen over SSH on 2026-10-21, before the first install:
 - `lightdm` already has `autologin-user=pi`, and `/run/user/1000/wayland-0` plus `/tmp/.X11-unix/X0` exist, which is what `piclock show` looks for.
 - Audio outputs: HDMI and the headphone jack, through PipeWire. The time zone is America/Chicago and the clock is synchronized.
 
-Still to confirm after the install:
+Confirmed after the first install (2026-10-21, a six-lens read-only check over SSH plus a screenshot of the real screen with `grim`): the kiosk opens at login, the service runs as `pi`, the updater timer fired as root and exited 0, the Pi reads the public repo, config.ini is 0600, port 8080 is loopback-only, the screen stays lit, and Open-Meteo answered 503 for a while right after boot (hence the quick retry and the kinder message).
+Also seen, for the owner to decide: wayvnc listens on port 5900 with the pi account's well-known default password, rpcbind on 111; the default audio sink sits at 40%, so the chime will be faint (`ssh pi@raspberrypi.local 'XDG_RUNTIME_DIR=/run/user/1000 wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.8'` raises it without sudo). A screenshot of the real screen: `ssh pi@raspberrypi.local 'WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000 grim /tmp/s.png'` then scp it.
 
-- The kiosk actually opening at login, and `piclock show` from an SSH session.
+Still to confirm:
+
+- `piclock show` from an SSH session and from the hide button's return timer (the service has no display environment of its own; `cmd_show` sets `XDG_RUNTIME_DIR` and `WAYLAND_DISPLAY`).
+- The on-screen keyboard and the whole Settings flow on the real touchscreen, and whether the Pi's own keyboard (squeekboard) also pops up over it.
 - `raspi-config nonint do_blanking 1` on this OS version.
 - The chime playing through the chosen output.
 - Real Gmail/iCloud IMAP sign-in, and real Google/iCloud/Outlook .ics feeds.
+- The light turning red on a real usage limit (`StopFailure` wording), and `SessionEnd` firing when a terminal is closed rather than exited.
 
 ## Ideas, if the owner wants more
 
-- Real backlight dimming on the official touchscreen via `/sys/class/backlight` instead of the black overlay.
-- Touch: tap to dismiss the mail alert, tap the mail panel for more messages.
-- Severe weather alerts; a second time zone; OAuth for Outlook.com.
+- Backlight dimming: this HDMI touchscreen (TSTP MTouch, 1280×800) exposes no `/sys/class/backlight` and no DDC, so the overlay stays.
+- A hidden clock could minimise instead of closing Chromium if `wlrctl` were installed (a system package; ask first).
+- Severe weather alerts; a second time zone; OAuth for Outlook.com; hourly forecast on a tap of the weather panel.

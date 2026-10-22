@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PiClock settings</title>
+<style>
+  @font-face {
+    font-family: "Big Shoulders Display";
+    src: url("/static/fonts/BigShouldersDisplay.ttf") format("truetype");
+    font-weight: 100 900;
+    font-display: block;
+  }
+  @font-face {
+    font-family: "Atkinson Hyperlegible Next";
+    src: url("/static/fonts/AtkinsonHyperlegibleNext.ttf") format("truetype");
+    font-weight: 200 800;
+    font-display: block;
+  }
+  :root {
+    color-scheme: dark;
+    --night: #172031; --dusk: #222E44; --bone: #EEE7D7; --mist: #A5ADBB; --haze: #67728A; --sodium: #F2B45C;
+    --u: min(1vw, 1.6667vh);
+    --display: "Big Shoulders Display", "Arial Narrow", "Roboto Condensed", sans-serif;
+    --text: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", "DejaVu Sans", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body {
+    background: var(--night); color: var(--bone);
+    font-family: var(--text); font-size: calc(var(--u) * 2.2); line-height: 1.3;
+    cursor: none; -webkit-font-smoothing: antialiased;
+    touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+    display: flex; flex-direction: column;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: none; }
+
+  header { display: flex; align-items: center; justify-content: space-between; padding: calc(var(--u) * 2) calc(var(--u) * 4.2) calc(var(--u) * 1); }
+  h1 { margin: 0; font-family: var(--display); font-weight: 700; font-size: calc(var(--u) * 6); line-height: 1; }
+  main { flex: 1; min-height: 0; overflow-y: auto; padding: 0 calc(var(--u) * 4.2) calc(var(--u) * 14); touch-action: pan-y; scrollbar-width: none; }
+  main::-webkit-scrollbar { display: none; }
+  section { margin-top: calc(var(--u) * 3); }
+  h2 { margin: 0 0 calc(var(--u) * 0.4); font-family: var(--display); font-weight: 600; font-size: calc(var(--u) * 3.4); line-height: 1; }
+  .intro { color: var(--mist); margin: 0 0 calc(var(--u) * 0.6); max-width: 70ch; }
+
+  .row {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: calc(var(--u) * 2);
+    min-height: calc(var(--u) * 6.4); padding: calc(var(--u) * 0.5) 0; border-top: 1px solid var(--dusk);
+  }
+  .row .label { min-width: 0; }
+  .hint { color: var(--haze); font-size: calc(var(--u) * 1.7); }
+  .row .label .hint { display: block; }
+
+  .btn { background: var(--dusk); color: var(--bone); border-radius: calc(var(--u) * 1); padding: calc(var(--u) * 1.1) calc(var(--u) * 2.2); font-size: calc(var(--u) * 2.1); min-height: calc(var(--u) * 4.8); white-space: nowrap; }
+  .btn.primary { background: var(--bone); color: var(--night); font-weight: 700; }
+  .btn.primary[disabled] { opacity: 0.4; }
+  .btn.quiet { background: none; color: var(--mist); }
+
+  .toggle { width: calc(var(--u) * 8); height: calc(var(--u) * 4.4); border-radius: calc(var(--u) * 2.2); background: var(--dusk); position: relative; }
+  .toggle::after {
+    content: ""; position: absolute; top: calc(var(--u) * 0.5); left: calc(var(--u) * 0.5);
+    width: calc(var(--u) * 3.4); height: calc(var(--u) * 3.4); border-radius: 50%; background: var(--haze);
+    transition: transform 0.15s, background 0.15s;
+  }
+  .toggle.on { background: color-mix(in srgb, var(--bone) 30%, var(--dusk)); }
+  .toggle.on::after { transform: translateX(calc(var(--u) * 3.6)); background: var(--bone); }
+
+  .stepper { display: flex; align-items: center; gap: calc(var(--u) * 0.6); }
+  .stepper button.step { width: calc(var(--u) * 5.2); height: calc(var(--u) * 4.8); border-radius: calc(var(--u) * 1); background: var(--dusk); font-size: calc(var(--u) * 3); }
+  .stepper .val { min-width: calc(var(--u) * 10); height: calc(var(--u) * 4.8); text-align: center; font-family: var(--display); font-weight: 600; font-size: calc(var(--u) * 3.2); }
+  .stepper .val small { font-family: var(--text); font-weight: 400; font-size: calc(var(--u) * 1.7); color: var(--mist); margin-left: calc(var(--u) * 0.5); }
+
+  .field {
+    min-height: calc(var(--u) * 4.8); max-width: calc(var(--u) * 42); padding: calc(var(--u) * 0.9) calc(var(--u) * 1.6);
+    border-radius: calc(var(--u) * 1); background: var(--dusk); text-align: left;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .field.empty { color: var(--haze); }
+
+  .seg { display: flex; background: var(--dusk); border-radius: calc(var(--u) * 1); padding: calc(var(--u) * 0.3); }
+  .seg button { padding: calc(var(--u) * 0.8) calc(var(--u) * 1.8); border-radius: calc(var(--u) * 0.8); color: var(--mist); min-height: calc(var(--u) * 4.2); }
+  .seg button.on { background: var(--bone); color: var(--night); font-weight: 700; }
+
+  .card { background: color-mix(in srgb, var(--dusk) 55%, var(--night)); border-radius: calc(var(--u) * 1.4); padding: calc(var(--u) * 0.6) calc(var(--u) * 2) calc(var(--u) * 1.4); margin-top: calc(var(--u) * 1.2); }
+  .card .row:first-child { border-top: 0; }
+  .foot { display: flex; gap: calc(var(--u) * 1.4); align-items: center; flex-wrap: wrap; margin-top: calc(var(--u) * 1); }
+  .result { color: var(--mist); font-size: calc(var(--u) * 1.8); }
+  .result.bad { color: var(--bone); }
+  .list .label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  footer {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: space-between; gap: calc(var(--u) * 2);
+    padding: calc(var(--u) * 2.4) calc(var(--u) * 4.2) calc(var(--u) * 1.6);
+    background: linear-gradient(transparent, var(--night) 35%);
+  }
+  #msg { color: var(--mist); font-size: calc(var(--u) * 1.9); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #msg.bad { color: var(--bone); }
+
+  /* the on-screen keyboard */
+  #kb {
+    position: fixed; left: 0; right: 0; bottom: 0; display: none; flex-direction: column; gap: calc(var(--u) * 0.7);
+    padding: calc(var(--u) * 1) calc(var(--u) * 1.2) calc(var(--u) * 1.2);
+    background: var(--dusk); box-shadow: 0 calc(var(--u) * -1) calc(var(--u) * 4) rgba(5, 10, 20, 0.5);
+  }
+  #kb.show { display: flex; }
+  .kb-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; gap: calc(var(--u) * 1); align-items: center; padding: 0 calc(var(--u) * 0.4); }
+  .kb-label { color: var(--mist); white-space: nowrap; }
+  .kb-value { background: var(--night); border-radius: calc(var(--u) * 0.9); padding: calc(var(--u) * 0.9) calc(var(--u) * 1.4); min-height: calc(var(--u) * 4.4); white-space: nowrap; overflow: hidden; font-size: calc(var(--u) * 2.4); }
+  .kb-value.empty { color: var(--haze); }
+  .kb-row { display: flex; justify-content: center; gap: calc(var(--u) * 0.7); }
+  .kb-row button { flex: 0 0 calc(var(--u) * 8.6); height: calc(var(--u) * 5.4); border-radius: calc(var(--u) * 0.9); background: var(--night); color: var(--bone); font-size: calc(var(--u) * 2.6); }
+  .kb-row button.wide { flex-basis: calc(var(--u) * 13.2); font-size: calc(var(--u) * 1.9); color: var(--mist); }
+  .kb-row button.space { flex-basis: calc(var(--u) * 38); }
+  .kb-row button.on { background: var(--bone); color: var(--night); }
+  .kb-row button.go { background: var(--bone); color: var(--night); font-weight: 700; }
+
+  #overlay { position: fixed; inset: 0; background: rgba(23, 32, 49, 0.93); display: none; align-items: center; justify-content: center; padding: calc(var(--u) * 6); }
+  #overlay.show { display: flex; }
+  .box { background: var(--dusk); border-radius: calc(var(--u) * 1.6); padding: calc(var(--u) * 2.6) calc(var(--u) * 3.2); max-width: calc(var(--u) * 72); width: 100%; display: grid; row-gap: calc(var(--u) * 1.2); max-height: 100%; overflow-y: auto; }
+  .box h3 { margin: 0; font-family: var(--display); font-weight: 600; font-size: calc(var(--u) * 3.8); line-height: 1; }
+  .box .lines { display: grid; row-gap: calc(var(--u) * 0.4); color: var(--mist); }
+  .box .buttons { display: flex; gap: calc(var(--u) * 1.2); flex-wrap: wrap; margin-top: calc(var(--u) * 0.6); }
+  .providers { display: grid; grid-template-columns: repeat(3, 1fr); gap: calc(var(--u) * 1); }
+  .providers .btn { text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Settings</h1>
+  <button class="btn" id="back">Back to the clock</button>
+</header>
+<main id="main"></main>
+<footer>
+  <span id="msg"></span>
+  <button class="btn primary" id="save" disabled>Save and apply</button>
+</footer>
+
+<div id="kb" aria-label="On-screen keyboard">
+  <div class="kb-head">
+    <span class="kb-label" id="kb-label"></span>
+    <span class="kb-value" id="kb-value"></span>
+    <button class="btn quiet" id="kb-clear">Clear</button>
+    <button class="btn quiet" id="kb-cancel">Cancel</button>
+    <button class="btn primary" id="kb-done">Done</button>
+  </div>
+  <div id="kb-rows"></div>
+</div>
+
+<div id="overlay" role="dialog"><div class="box" id="box"></div></div>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+let MODEL = null;
+const values = {};        // "section.key" -> value as the page holds it
+let mailboxes = [];       // every mailbox that should exist after saving
+let links = [];           // existing calendar links: {id, label, keep}
+let newLinks = [];        // links typed on this screen
+let dirty = false;
+let idleTimer = null;
+
+/* ---------- loading and drawing ---------- */
+async function load() {
+  let r;
+  try { r = await fetch("/api/settings", { cache: "no-store" }); } catch (e) { r = null; }
+  if (!r || !r.ok) { say("Couldn't load the settings. Is the clock service running?", true); return; }
+  MODEL = await r.json();
+  for (const s of MODEL.sections) for (const f of s.fields) values[`${s.id}.${f.key}`] = f.value;
+  mailboxes = MODEL.mailboxes.map((b) => ({ ...b, was: b.name, password: "", hint: "" }));
+  links = MODEL.calendar_links.map((l) => ({ ...l, keep: true }));
+  newLinks = [];
+  dirty = false;
+  render();
+}
+
+function say(text, bad = false) {
+  $("#msg").textContent = text;
+  $("#msg").classList.toggle("bad", bad);
+}
+function touched() { dirty = true; $("#save").disabled = false; }
+
+function control(sid, f) {
+  const id = `${sid}.${f.key}`, v = values[id];
+  if (f.type === "bool") return `<button class="toggle${v ? " on" : ""}" data-toggle="${id}" role="switch" aria-checked="${!!v}" aria-label="${esc(f.label)}"></button>`;
+  if (f.type === "number") {
+    const unit = f.unit ? `<small>${esc(f.unit)}</small>` : "";
+    const show = f.zero !== undefined && Number(v) === 0 ? esc(f.zero) : `${esc(v)}${unit}`;
+    return `<span class="stepper"><button class="step" data-step="${id}" data-dir="-1" aria-label="Less">−</button><button class="val" data-edit="${id}" data-kind="num">${show}</button><button class="step" data-step="${id}" data-dir="1" aria-label="More">+</button></span>`;
+  }
+  if (f.type === "choice") {
+    const labels = f.labels || f.choices;
+    return `<span class="seg">${f.choices.map((c, i) => `<button data-choice="${id}" data-value="${esc(c)}" class="${v === c ? "on" : ""}">${esc(labels[i])}</button>`).join("")}</span>`;
+  }
+  const kind = f.type === "text" ? "abc" : "num";
+  return `<button class="field${v ? "" : " empty"}" data-edit="${id}" data-kind="${kind}">${v ? esc(v) : "Not set"}</button>`;
+}
+
+function row(label, hint, controlHtml, extraClass = "") {
+  return `<div class="row ${extraClass}"><span class="label">${esc(label)}${hint ? `<span class="hint">${esc(hint)}</span>` : ""}</span>${controlHtml}</div>`;
+}
+
+function mailboxCard(b, i) {
+  const pw = b.password ? "New password typed" : b.password_set ? "Saved. Tap to change" : "Not set";
+  return `<div class="card" data-card="${i}">
+    ${row("Name", "", `<button class="field" data-mb="${i}" data-key="name" data-kind="abc">${esc(b.name)}</button>`)}
+    ${row("Server", "", `<button class="field${b.host ? "" : " empty"}" data-mb="${i}" data-key="host" data-kind="abc">${b.host ? esc(b.host) : "Not set"}</button>`)}
+    ${row("Port", "", `<button class="field" data-mb="${i}" data-key="port" data-kind="num">${esc(b.port || "993")}</button>`)}
+    ${row("Username", "", `<button class="field${b.username ? "" : " empty"}" data-mb="${i}" data-key="username" data-kind="abc">${b.username ? esc(b.username) : "Not set"}</button>`)}
+    ${row("App password", b.hint, `<button class="field${b.password || b.password_set ? "" : " empty"}" data-mb="${i}" data-key="password" data-kind="abc">${pw}</button>`)}
+    ${row("Folder", "", `<button class="field" data-mb="${i}" data-key="folder" data-kind="abc">${esc(b.folder || "INBOX")}</button>`)}
+    <div class="foot"><button class="btn" data-mb-check="${i}">Check sign-in</button><button class="btn quiet" data-mb-remove="${i}">Remove mailbox</button><span class="result" id="mb-result-${i}"></span></div>
+  </div>`;
+}
+
+function linkLabel(url) {   // host only: for some providers the path is the secret
+  try { return `${new URL(url).host}, new link`; } catch (e) { return "new link"; }
+}
+
+function render() {
+  let html = `<p class="intro">Tap a value to change it. Passwords and calendar links are stored encrypted on the Pi.</p>`;
+  for (const s of MODEL.sections) {
+    html += `<section><h2>${esc(s.title)}</h2>`;
+    if (s.id === "calendar") {
+      const kept = links.filter((l) => l.keep).map((l) => row(l.label, "", `<button class="btn quiet" data-link-remove="${l.id}">Remove</button>`, "list")).join("");
+      const added = newLinks.map((u, i) => row(linkLabel(u), "", `<button class="btn quiet" data-newlink-remove="${i}">Remove</button>`, "list")).join("");
+      html += kept + added + (kept || added ? "" : `<p class="hint">No calendar links yet.</p>`);
+      html += `<div class="foot"><button class="btn" id="add-link">Add a calendar link</button><span class="hint">Long links are easier to send from your PC: see README.md.</span></div>`;
+    }
+    html += s.fields.map((f) => row(f.label, f.hint, control(s.id, f))).join("");
+    if (s.id === "email") {
+      html += mailboxes.map(mailboxCard).join("");
+      html += `<div class="foot"><button class="btn" id="add-mailbox">Add a mailbox</button><span class="hint">Use an app password, not your normal password.</span></div>`;
+    }
+    html += `</section>`;
+  }
+  $("#main").innerHTML = html;
+}
+
+/* ---------- taps ---------- */
+function field(id) {
+  for (const s of MODEL.sections) for (const f of s.fields) if (`${s.id}.${f.key}` === id) return f;
+  return null;
+}
+
+$("#main").addEventListener("click", async (e) => {
+  const t = e.target.closest("button");
+  if (!t) return;
+  if (t.dataset.toggle) { values[t.dataset.toggle] = !values[t.dataset.toggle]; touched(); render(); return; }
+  if (t.dataset.step) {
+    const f = field(t.dataset.step), step = Number(f.step || 1);
+    let v = Number(values[t.dataset.step] || 0) + step * Number(t.dataset.dir);
+    v = Math.min(f.max ?? 1e9, Math.max(f.min ?? -1e9, v));
+    values[t.dataset.step] = String(Number(v.toFixed(2)));
+    touched(); render(); return;
+  }
+  if (t.dataset.choice) { values[t.dataset.choice] = t.dataset.value; touched(); render(); return; }
+  if (t.dataset.edit) {
+    const f = field(t.dataset.edit);
+    openKeyboard(f.label, values[t.dataset.edit], t.dataset.kind, (v) => { values[t.dataset.edit] = v; touched(); render(); });
+    return;
+  }
+  if (t.dataset.mb !== undefined) {
+    const b = mailboxes[Number(t.dataset.mb)], key = t.dataset.key;
+    const label = { name: "Mailbox name", host: "Server", port: "Port", username: "Username", password: "App password", folder: "Folder" }[key];
+    openKeyboard(label, key === "password" ? "" : b[key], t.dataset.kind, (v) => { b[key] = v; touched(); render(); });
+    return;
+  }
+  if (t.dataset.mbRemove !== undefined) { mailboxes.splice(Number(t.dataset.mbRemove), 1); touched(); render(); return; }
+  if (t.dataset.mbCheck !== undefined) { await checkMailbox(Number(t.dataset.mbCheck)); return; }
+  if (t.id === "add-mailbox") { chooseProvider(); return; }
+  if (t.dataset.linkRemove !== undefined) { links.find((l) => String(l.id) === t.dataset.linkRemove).keep = false; touched(); render(); return; }
+  if (t.dataset.newlinkRemove !== undefined) { newLinks.splice(Number(t.dataset.newlinkRemove), 1); touched(); render(); return; }
+  if (t.id === "add-link") { openKeyboard("Calendar link", "", "abc", (v) => { if (v.trim()) { newLinks.push(v.trim()); touched(); render(); } }); return; }
+});
+
+async function checkMailbox(i) {
+  const b = mailboxes[i], out = $(`#mb-result-${i}`);
+  out.textContent = "Signing in…"; out.classList.remove("bad");
+  try {
+    const r = await fetch("/api/settings/check", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: b.name, was: b.was, host: b.host, port: b.port, username: b.username, password: b.password, folder: b.folder }) });
+    const j = await r.json();
+    out.textContent = j.ok ? `Signed in. ${j.unread} unread.` : (j.error || "Couldn't check.");
+    out.classList.toggle("bad", !j.ok);
+  } catch (e) { out.textContent = "Couldn't reach the clock service."; out.classList.add("bad"); }
+}
+
+function chooseProvider() {
+  const buttons = MODEL.providers.map((p, i) => `<button class="btn" data-provider="${i}">${esc(p.name)}</button>`).join("");
+  showBox("Which mail service?", [], `<div class="providers">${buttons}</div>`, [["Cancel", hideBox]]);
+  $("#box").querySelectorAll("[data-provider]").forEach((btn) => btn.addEventListener("click", () => {
+    const p = MODEL.providers[Number(btn.dataset.provider)];
+    mailboxes.push({ was: "", name: p.name === "Other" ? "Mail" : p.name, host: p.host, port: String(p.port), username: "", password: "", folder: "INBOX", password_set: false, hint: p.hint });
+    hideBox(); touched(); render();
+    const card = $(`[data-card="${mailboxes.length - 1}"]`);
+    if (card) card.scrollIntoView({ block: "start" });
+  }));
+}
+
+/* ---------- saving ---------- */
+async function save() {
+  if (!dirty) return;
+  const form = {
+    values,
+    mailboxes: mailboxes.map((b) => ({ was: b.was, name: b.name, host: b.host, port: b.port, username: b.username, password: b.password, folder: b.folder })),
+    calendar: { keep: links.filter((l) => l.keep).map((l) => l.id), add: newLinks },
+  };
+  say("Saving…");
+  let r, j = {};
+  try {
+    r = await fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+    j = await r.json().catch(() => ({}));
+  } catch (e) { r = null; }
+  if (!r || !r.ok) { say(j.error || "Couldn't save. Is the clock service running?", true); return; }
+  dirty = false; $("#save").disabled = true; say("");
+  if (j.port && String(j.port) !== (location.port || "80")) {
+    // The service comes back on another port, where this page can't ask after it: just go there.
+    showBox("Applying your settings", [`The clock service is starting again on port ${j.port}. The screen follows in a moment…`], "", []);
+    await sleep(6000);
+    location.href = `http://127.0.0.1:${j.port}/`;
+    return;
+  }
+  showBox("Applying your settings", ["The clock service is starting again with the new settings…"], "", []);
+  const back = await waitForService();
+  const lines = back ? await statusLines() : ["The service hasn't answered yet. It keeps trying by itself; the clock shows what's wrong."];
+  showBox("Saved", lines, "", [["Back to the clock", () => { location.href = "/"; }], ["Stay in settings", async () => { hideBox(); await load(); }]]);
+}
+
+async function waitForService() {
+  await sleep(2500);
+  for (let i = 0; i < 40; i++) {
+    try { const r = await fetch("/api/health", { cache: "no-store" }); if (r.ok) return true; } catch (e) { /* not yet */ }
+    await sleep(1000);
+  }
+  return false;
+}
+
+async function statusLines() {
+  await sleep(3000);   // give the first checks a moment
+  try {
+    const d = await (await fetch("/api/all", { cache: "no-store" })).json();
+    const lines = [];
+    const w = d.weather;
+    lines.push(!w.enabled ? "Weather: not set up" : w.data ? `Weather: ${w.data.temp}° in ${w.data.location || "your place"}` : w.error ? `Weather: ${w.error}` : "Weather: checking…");
+    const m = d.mail;
+    if (!m.enabled) lines.push("Mail: not set up");
+    else if (m.data) for (const b of m.data.boxes) lines.push(`Mail, ${b.name}: ${b.error || `${b.unread} unread`}`);
+    else lines.push(m.error ? `Mail: ${m.error}` : "Mail: still checking, the clock shows the result");
+    const c = d.calendar;
+    if (!c.enabled) lines.push("Calendar: not set up");
+    else if (c.data) { lines.push(`Calendar: ${c.data.events.length} upcoming events`); lines.push(...c.data.errors); }
+    else lines.push(c.error ? `Calendar: ${c.error}` : "Calendar: still loading, the clock shows the result");
+    return lines;
+  } catch (e) { return ["The clock is back. Its panels show anything that needs attention."]; }
+}
+
+$("#save").addEventListener("click", save);
+$("#back").addEventListener("click", () => {
+  if (!dirty) { location.href = "/"; return; }
+  showBox("Leave without saving?", ["Your changes on this screen will be lost."], "", [["Leave", () => { location.href = "/"; }], ["Stay", hideBox]]);
+});
+
+/* ---------- boxes ---------- */
+function showBox(title, lines, extraHtml, buttons) {
+  $("#box").innerHTML = `<h3>${esc(title)}</h3>` + (lines.length ? `<div class="lines">${lines.map((l) => `<span>${esc(l)}</span>`).join("")}</div>` : "") + extraHtml
+    + (buttons.length ? `<div class="buttons">${buttons.map((b, i) => `<button class="btn${i === 0 ? " primary" : ""}" data-box="${i}">${esc(b[0])}</button>`).join("")}</div>` : "");
+  $("#box").querySelectorAll("[data-box]").forEach((btn) => btn.addEventListener("click", buttons[Number(btn.dataset.box)][1]));
+  $("#overlay").classList.add("show");
+}
+function hideBox() { $("#overlay").classList.remove("show"); }
+
+/* ---------- the on-screen keyboard ---------- */
+const KB = { value: "", layer: "abc", shift: false, onDone: null, open: false };
+const LAYERS = {
+  abc: [["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"], ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+        ["⇧", "z", "x", "c", "v", "b", "n", "m", "⌫"], ["?123", "@", "space", ".", "-", "Done"]],
+  sym: [["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"], ["-", "_", "/", ":", ";", "(", ")", "$", "&", "%"],
+        ["#+=", ".", ",", "?", "!", "'", "\"", "⌫"], ["abc", "@", "space", "=", "Done"]],
+  more: [["[", "]", "{", "}", "#", "^", "*", "+", "="], ["\\", "|", "~", "<", ">", "`", "€", "£"],
+         ["?123", ".", ",", "?", "!", "'", "⌫"], ["abc", "space", "Done"]],
+  num: [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["-", "0", ".", ":", "⌫", "Done"]],
+};
+const WIDE = new Set(["⇧", "⌫", "?123", "#+=", "abc", "Done"]);
+
+function openKeyboard(label, value, kind, onDone) {
+  KB.value = value || ""; KB.layer = kind === "num" ? "num" : "abc"; KB.shift = false; KB.onDone = onDone; KB.open = true; KB.kind = kind;
+  $("#kb-label").textContent = label;
+  drawKeys(); drawValue();
+  $("#kb").classList.add("show");
+}
+function closeKeyboard() { KB.open = false; $("#kb").classList.remove("show"); }
+function drawValue() {
+  const el = $("#kb-value"), v = KB.value;
+  el.classList.toggle("empty", !v);
+  el.textContent = v ? (v.length > 48 ? "…" + v.slice(-47) : v) : "Type here";
+}
+function drawKeys() {
+  $("#kb-rows").innerHTML = LAYERS[KB.layer].map((keys) => `<div class="kb-row">${keys.map((k) => {
+    const cls = k === "space" ? "space" : WIDE.has(k) ? "wide" : "";
+    const on = k === "⇧" && KB.shift ? " on" : "";
+    const go = k === "Done" ? " go" : "";
+    const text = k === "space" ? "" : (KB.layer === "abc" && KB.shift && k.length === 1) ? k.toUpperCase() : k;
+    return `<button class="${cls}${on}${go}" data-key="${esc(k)}">${esc(text)}</button>`;
+  }).join("")}</div>`).join("");
+}
+function press(k) {
+  if (k === "⌫") KB.value = KB.value.slice(0, -1);
+  else if (k === "⇧") { KB.shift = !KB.shift; drawKeys(); return; }
+  else if (k === "?123") { KB.layer = "sym"; drawKeys(); return; }
+  else if (k === "#+=") { KB.layer = "more"; drawKeys(); return; }
+  else if (k === "abc") { KB.layer = "abc"; drawKeys(); return; }
+  else if (k === "space") KB.value += " ";
+  else if (k === "Done") { const fn = KB.onDone, v = KB.value; closeKeyboard(); fn(v); return; }
+  else { KB.value += KB.shift ? k.toUpperCase() : k; if (KB.shift) { KB.shift = false; drawKeys(); } }
+  drawValue();
+}
+$("#kb-rows").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) press(b.dataset.key); });
+$("#kb-clear").addEventListener("click", () => { KB.value = ""; drawValue(); });
+$("#kb-cancel").addEventListener("click", closeKeyboard);
+$("#kb-done").addEventListener("click", () => press("Done"));
+// A real keyboard plugged into the Pi works too.
+document.addEventListener("keydown", (e) => {
+  if (!KB.open) return;
+  if (e.key === "Enter") press("Done");
+  else if (e.key === "Escape") closeKeyboard();
+  else if (e.key === "Backspace") press("⌫");
+  else if (e.key.length === 1) { KB.value += e.key; drawValue(); }
+  else return;
+  e.preventDefault();
+});
+
+/* ---------- housekeeping ---------- */
+function resetIdle() { clearTimeout(idleTimer); idleTimer = setTimeout(() => { location.href = "/"; }, 4 * 60 * 1000); }   // back to the clock when forgotten
+document.addEventListener("click", resetIdle, true);
+document.addEventListener("keydown", resetIdle, true);
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+resetIdle();
+load();
+</script>
+</body>
+</html>

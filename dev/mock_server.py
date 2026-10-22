@@ -4,19 +4,22 @@
     http://127.0.0.1:8099/new-mail       simulates a new email (the page shows the alert)
     http://127.0.0.1:8099/reset          back to the starting sample data
 
-Options: --port N, --24h, --empty (shows the "not set up" states), --errors
+Options: --port N, --24h, --empty (shows the "not set up" states), --errors, --no-claude, --light red
 """
 import argparse
+import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+import settings   # noqa: E402  (the real reader, pointed at config.example.ini)
 app = Flask(__name__, static_folder=str(ROOT / "static"), static_url_path="/static")
 STATE = {"extra_mail": 0}
-OPTS = argparse.Namespace(h24=False, empty=False, errors=False)
+OPTS = argparse.Namespace(h24=False, empty=False, errors=False, no_claude=False, light="")
 
 
 def at(days, hour, minute=0):
@@ -57,14 +60,31 @@ def sample_mail():
         {"id": "P:2", "mailbox": "Personal", "from": "Priya Raman", "subject": "Re: Saturday hike, still on?", "ts": t - 25 * 60},
         {"id": "P:1", "mailbox": "Personal", "from": "Chicago Public Library", "subject": "Your hold is ready for pickup", "ts": t - 3 * 3600},
         {"id": "W:9", "mailbox": "Work", "from": "Dana Whitfield", "subject": "Q4 planning doc: comments by Friday please", "ts": t - 26 * 3600},
+        {"id": "P:0", "mailbox": "Personal", "from": "Ravi", "subject": "Photos from the lake", "ts": t - 30 * 3600},
+        {"id": "W:8", "mailbox": "Work", "from": "Facilities", "subject": "Parking garage closed Monday", "ts": t - 2 * 86400},
+        {"id": "P:-1", "mailbox": "Personal", "from": "Dentist", "subject": "Appointment reminder: Thursday 8:30", "ts": t - 3 * 86400},
+        {"id": "P:-2", "mailbox": "Personal", "from": "Nadia", "subject": "Book club pick for November", "ts": t - 4 * 86400},
     ]
     for n in range(STATE["extra_mail"]):
         msgs.insert(0, {"id": f"P:new{n}", "mailbox": "Personal", "from": "Mom",
                         "subject": "Call me when you get a minute", "ts": t - 30})
-    personal = 2 + STATE["extra_mail"]
-    return {"total": personal + 1, "messages": msgs[:4],
+    personal = 5 + STATE["extra_mail"]
+    # The server sends more than the screen shows; a tap on the mail panel shows the rest.
+    return {"total": personal + 2, "messages": msgs[:12], "show": 4,
             "boxes": [{"name": "Personal", "unread": personal, "error": None},
-                      {"name": "Work", "unread": 1, "error": None}]}
+                      {"name": "Work", "unread": 2, "error": None}]}
+
+
+def sample_claude():
+    t = time.time()
+    return {"light": OPTS.light or "blue", "sessions": [
+        {"id": "a", "project": "PiClock", "state": "working", "pc": "", "since": t - 14 * 60, "updated": t - 20,
+         "task": "Add touch gestures and a Claude status strip to the clock"},
+        {"id": "b", "project": "splines", "state": "attention", "pc": "", "since": t - 3 * 60, "updated": t - 3 * 60,
+         "task": "Rebuild the figures with the new colour map"},
+        {"id": "c", "project": "AIforASD", "state": "done", "pc": "", "since": t - 48 * 60, "updated": t - 48 * 60,
+         "task": "Summarise the 55 papers in the reading map"},
+    ]}
 
 
 def sample_weather():
@@ -103,10 +123,43 @@ def reset():
     return "Back to the starting sample data.\n"
 
 
+@app.get("/settings")
+def settings_page():
+    return send_from_directory(ROOT / "static", "settings.html")
+
+
+@app.get("/api/settings")
+def settings_get():
+    d = settings.describe(ROOT / "config.example.ini")
+    d["mailboxes"] = [{"name": "Personal", "host": "imap.gmail.com", "port": "993", "username": "you@gmail.com",
+                       "password_set": True, "folder": "INBOX"}]
+    d["calendar_links"] = [{"id": 0, "label": "calendar.google.com … basic.ics"}]
+    return jsonify(d)
+
+
+@app.post("/api/settings")
+def settings_post():
+    print("(preview) settings would be saved:", list((request.get_json(silent=True) or {}).keys()))
+    return jsonify({"ok": True, "restarting": False})
+
+
+@app.post("/api/settings/check")
+def settings_check():
+    return jsonify({"ok": True, "unread": 3})
+
+
+@app.post("/api/screen")
+def screen():
+    action = (request.get_json(silent=True) or {}).get("action")
+    print(f"(preview) the screen would now {action}")
+    return jsonify({"ok": True})
+
+
 @app.get("/api/all")
 def all_data():
     config = {"clock_24h": OPTS.h24, "show_seconds": False, "dim_start": "", "dim_end": "",
-              "dim_amount": 0.6, "chime": True}
+              "dim_amount": 0.6, "chime": True, "hide_minutes": 30}
+    claude = {"enabled": False} if OPTS.empty or OPTS.no_claude else ok(sample_claude())
     if OPTS.empty:
         weather = {"enabled": False}; mail = {"enabled": False}; calendar = {"enabled": False}
     elif OPTS.errors:
@@ -121,8 +174,8 @@ def all_data():
     else:
         weather, mail = ok(sample_weather()), ok(sample_mail())
         calendar = ok({"days": 7, "events": sample_events(), "errors": []})
-    return jsonify({"boot_id": "preview", "config": config,
-                    "weather": weather, "mail": mail, "calendar": calendar})
+    return jsonify({"boot_id": "preview", "config": config, "weather": weather, "mail": mail,
+                    "calendar": calendar, "claude": claude, "screen": {"hidden_until": None}})
 
 
 if __name__ == "__main__":
@@ -131,6 +184,8 @@ if __name__ == "__main__":
     ap.add_argument("--24h", dest="h24", action="store_true", help="24-hour clock")
     ap.add_argument("--empty", action="store_true", help="nothing set up yet")
     ap.add_argument("--errors", action="store_true", help="show error states")
+    ap.add_argument("--no-claude", dest="no_claude", action="store_true", help="without the Claude light")
+    ap.add_argument("--light", choices=["green", "blue", "yellow", "red"], default="", help="colour of the Claude light")
     OPTS = ap.parse_args()
     print(f"Preview: http://127.0.0.1:{OPTS.port}")
     app.run(host="127.0.0.1", port=OPTS.port)

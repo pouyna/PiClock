@@ -56,9 +56,23 @@ def main():
             page.evaluate("fetch('/new-mail').then(() => poll())")
             page.wait_for_timeout(1500)
 
+        def tap(selector):   # a touch on the Pi arrives as a click
+            def do(page):
+                page.click(selector)
+                page.wait_for_timeout(400)
+            return do
+
         scenarios = [
             ([], lambda port: [shoot(port, f"normal_{w}x{h}", (w, h)) for w, h in SIZES]
-                              + [shoot(port, "new_mail_800x480", (800, 480), trigger_new_mail)]),
+                              + [shoot(port, "new_mail_800x480", (800, 480), trigger_new_mail),
+                                 shoot(port, "tap_mail_800x480", (800, 480), tap("#mail")),
+                                 shoot(port, "tap_agenda_800x480", (800, 480), tap("#agenda")),
+                                 shoot(port, "tap_hide_800x480", (800, 480), tap("#hide")),
+                                 shoot(port, "tap_light_800x480", (800, 480), tap("#light"))]),
+            (["--no-claude"], lambda port: shoot(port, "no_claude_800x480", (800, 480))),
+            (["--light", "red"], lambda port: [shoot(port, "settings_800x480", (800, 480), lambda page: page.goto(f"http://127.0.0.1:{port}/settings") and page.wait_for_timeout(800)),
+                                               shoot(port, "settings_keyboard_800x480", (800, 480), lambda page: (page.goto(f"http://127.0.0.1:{port}/settings"), page.wait_for_timeout(800), page.click('[data-edit="weather.location_name"]'), page.wait_for_timeout(400))),
+                                               shoot(port, "settings_1280x800", (1280, 800), lambda page: page.goto(f"http://127.0.0.1:{port}/settings") and page.wait_for_timeout(800))]),
             (["--24h"], lambda port: shoot(port, "24h_800x480", (800, 480))),
             (["--empty"], lambda port: shoot(port, "not_set_up_800x480", (800, 480))),
             (["--errors"], lambda port: shoot(port, "errors_800x480", (800, 480))),

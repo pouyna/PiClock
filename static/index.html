@@ -41,6 +41,11 @@
     line-height: 1.3;
     cursor: none;
     -webkit-font-smoothing: antialiased;
+    /* a touchscreen: taps only, no zooming, no text selection, no long-press menus */
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
   }
 
   #app {
@@ -53,7 +58,6 @@
     row-gap: calc(var(--u) * 2.6);
     transition: transform 3s ease;
   }
-
   /* ---------- time ---------- */
   .time { min-width: 0; }
   .date {
@@ -176,6 +180,11 @@
   /* ---------- agenda & mail ---------- */
   .agenda, .mail { min-height: 0; overflow: hidden; position: relative; }
   .agenda, .mail { -webkit-mask-image: linear-gradient(#000 82%, transparent); mask-image: linear-gradient(#000 82%, transparent); }
+  /* a tap pages through a panel; once scrolled, the top fades too */
+  .agenda.scrolled, .mail.scrolled {
+    -webkit-mask-image: linear-gradient(transparent, #000 8%, #000 82%, transparent);
+    mask-image: linear-gradient(transparent, #000 8%, #000 82%, transparent);
+  }
 
   .day + .day { margin-top: calc(var(--u) * 1.2); }
   .day h2 {
@@ -233,6 +242,51 @@
   .note.first { margin: 0 0 calc(var(--u) * 1.2); }
   .mail .note { margin: calc(var(--u) * 0.6) 0 0; }
 
+  /* ---------- the Claude light (what the PC's Claude Code sessions are doing) ---------- */
+  #light {
+    position: fixed; left: calc(var(--u) * 1.2); bottom: calc(var(--u) * 0.7);
+    width: calc(var(--u) * 5.4); height: calc(var(--u) * 5.4);   /* a finger-sized target around a small light */
+    padding: 0; border: 0; background: none; cursor: none;
+    display: none; align-items: center; justify-content: center;
+    --light: #5FBF8A;
+  }
+  #light.show { display: flex; }
+  #light::after {
+    content: ""; width: calc(var(--u) * 1.6); height: calc(var(--u) * 1.6); border-radius: 50%;
+    background: var(--light); box-shadow: 0 0 calc(var(--u) * 1.3) var(--light);
+  }
+  #light.green { --light: #5FBF8A; }    /* nothing running */
+  #light.blue { --light: #5B9CF2; }     /* working */
+  #light.yellow { --light: #F2B45C; }   /* done, or waiting for the owner */
+  #light.red { --light: #E0564F; }      /* session limit reached */
+
+  /* a tap on the light: the sessions behind the colour */
+  #claude-sheet {
+    position: fixed; left: calc(var(--u) * 1.6); bottom: calc(var(--u) * 6.6);
+    width: min(calc(var(--u) * 60), calc(100vw - var(--u) * 3.2));
+    padding: calc(var(--u) * 1.6) calc(var(--u) * 2.4);
+    background: var(--bone); color: var(--night);
+    border-radius: calc(var(--u) * 1.2);
+    box-shadow: 0 calc(var(--u) * 1) calc(var(--u) * 4) rgba(5, 10, 20, 0.5);
+  }
+  #claude-sheet[hidden] { display: none; }
+  .cs {
+    display: grid;
+    grid-template-columns: calc(var(--u) * 1.4) auto auto minmax(0, 1fr);
+    column-gap: calc(var(--u) * 1.2);
+    align-items: baseline;
+    padding: calc(var(--u) * 0.25) 0;
+    font-size: calc(var(--u) * 1.95);
+  }
+  .cs-dot { width: calc(var(--u) * 1); height: calc(var(--u) * 1); border-radius: 50%; align-self: center; background: #5FBF8A; }
+  .cs.working .cs-dot { background: #5B9CF2; }
+  .cs.done .cs-dot, .cs.attention .cs-dot { background: #F2B45C; }
+  .cs.limit .cs-dot { background: #E0564F; }
+  .cs-name { font-weight: 700; white-space: nowrap; }
+  .cs-state { white-space: nowrap; color: color-mix(in srgb, var(--night) 75%, var(--bone)); }
+  .cs-task { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: color-mix(in srgb, var(--night) 55%, var(--bone)); }
+  #claude-sheet .legend, #claude-sheet .quiet { margin: calc(var(--u) * 0.6) 0 0; font-size: calc(var(--u) * 1.7); color: color-mix(in srgb, var(--night) 60%, var(--bone)); max-width: none; }
+
   /* ---------- overlays ---------- */
   #toast {
     position: fixed;
@@ -252,10 +306,42 @@
   #toast span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   #status {
-    position: fixed; right: calc(var(--u) * 4.2); bottom: calc(var(--u) * 1.4);
-    font-size: calc(var(--u) * 1.6); color: var(--haze);
+    position: fixed; left: 50%; top: calc(var(--u) * 0.8); transform: translateX(-50%);
+    font-size: calc(var(--u) * 1.6); color: var(--haze); white-space: nowrap;
   }
   #dim { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 4s ease; }
+
+  /* the hide button: a quiet corner, a big enough target for a finger */
+  #hide {
+    position: fixed; right: calc(var(--u) * 1.2); bottom: calc(var(--u) * 0.7);
+    width: calc(var(--u) * 5.4); height: calc(var(--u) * 5.4);
+    padding: 0; border: 0; background: none;
+    color: var(--haze); opacity: 0.55; cursor: none;
+  }
+  #hide svg {
+    width: calc(var(--u) * 2.8); height: calc(var(--u) * 2.8);
+    fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
+  }
+  #sheet {
+    position: fixed; right: calc(var(--u) * 1.6); bottom: calc(var(--u) * 6.6);
+    width: min(calc(var(--u) * 46), calc(100vw - var(--u) * 3.2));
+    padding: calc(var(--u) * 1.8) calc(var(--u) * 2.4);
+    background: var(--bone); color: var(--night);
+    border-radius: calc(var(--u) * 1.2);
+    box-shadow: 0 calc(var(--u) * 1) calc(var(--u) * 4) rgba(5, 10, 20, 0.5);
+    display: grid; row-gap: calc(var(--u) * 0.5);
+  }
+  #sheet[hidden] { display: none; }
+  #sheet strong { font-size: calc(var(--u) * 2.5); }
+  #sheet span { font-size: calc(var(--u) * 1.9); color: color-mix(in srgb, var(--night) 72%, var(--bone)); }
+  .sheet-buttons { display: flex; gap: calc(var(--u) * 1.2); margin-top: calc(var(--u) * 0.8); }
+  .sheet-buttons button {
+    font: inherit; font-size: calc(var(--u) * 2.1);
+    padding: calc(var(--u) * 1) calc(var(--u) * 2.6);
+    border: 0; border-radius: calc(var(--u) * 0.9); cursor: none;
+  }
+  #sheet-settings, #sheet-hide { background: var(--night); color: var(--bone); }
+  #sheet-keep { background: none; color: var(--night); }
 
   /* portrait screens: stack everything */
   @media (max-aspect-ratio: 1/1) {
@@ -283,7 +369,15 @@
 </main>
 <div id="toast" role="status" aria-live="polite"></div>
 <div id="status" role="status"></div>
-<div id="dim"></div>
+<button id="light" role="status" aria-label="Claude status"></button>
+<div id="claude-sheet" role="dialog" aria-label="Claude sessions" hidden></div>
+<button id="hide" aria-label="Hide the clock"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+<div id="sheet" role="dialog" aria-label="PiClock" hidden>
+  <strong>PiClock</strong>
+  <span id="sheet-text"></span>
+  <div class="sheet-buttons"><button id="sheet-settings">Settings</button><button id="sheet-hide">Hide the clock</button><button id="sheet-keep">Keep it</button></div>
+</div>
+<div id="dim"></div>   <!-- last, so the night dim covers the corner controls too -->
 
 <script>
 "use strict";
@@ -292,13 +386,15 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const pad = (n) => String(n).padStart(2, "0");
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-let CFG = { clock_24h: false, show_seconds: false, dim_start: "", dim_end: "", dim_amount: 0.6, chime: true };
+let CFG = { clock_24h: false, show_seconds: false, dim_start: "", dim_end: "", dim_amount: 0.6, chime: true, hide_minutes: 30 };
 let DATA = null;
 let bootId = null;
 let seenMail = null;            // message ids already shown; null until the first successful check
 const freshUntil = new Map();   // id -> time the "new" dot disappears
 let toastTimer = null;
 let audioCtx = null;
+let mailMore = false;           // a tap on the mail panel shows every message the server has
+let wakeUntil = 0;              // a tap at night brightens the screen until this time
 
 /* ---------- time helpers ---------- */
 function hm(d) {
@@ -326,6 +422,13 @@ function ago(ts) {
   if (s < 6 * 86400) return d.toLocaleDateString(undefined, { weekday: "short" });
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
+function spanText(seconds) {
+  const m = Math.round(seconds / 60);
+  if (m < 1) return "under a minute";
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60), r = m % 60;
+  return r ? `${h} h ${r} min` : `${h} h`;
+}
 function untilText(ts) {
   const mins = Math.round((ts * 1000 - Date.now()) / 60000);
   if (mins <= 1) return "starting now";
@@ -342,6 +445,8 @@ function isQuietHours(now = new Date()) {
   const t = now.getHours() * 60 + now.getMinutes();
   return a < b ? t >= a && t < b : t >= a || t < b;
 }
+function dimmed() { return isQuietHours() && Date.now() >= wakeUntil; }
+function applyDim() { $("#dim").style.opacity = dimmed() ? CFG.dim_amount : 0; }
 
 /* ---------- weather icons (drawn, so they work offline) ---------- */
 const WX = {
@@ -446,7 +551,7 @@ function renderRibbon() {
 function renderWeather() {
   const el = $("#weather");
   const w = DATA?.weather;
-  if (!w || !w.enabled) { el.innerHTML = `<p class="quiet">Add your latitude and longitude to config.ini to see the weather here.</p>`; return; }
+  if (!w || !w.enabled) { el.innerHTML = `<p class="quiet">Add your latitude and longitude in Settings to see the weather here.</p>`; return; }
   const d = w.data;
   if (!d) { el.innerHTML = `<p class="quiet">${w.error ? "Weather isn't available right now. Trying again shortly." : "Getting the forecast…"}</p>`; return; }
 
@@ -472,7 +577,7 @@ function renderWeather() {
 function renderAgenda() {
   const el = $("#agenda");
   const c = DATA?.calendar;
-  if (!c || !c.enabled) { el.innerHTML = `<p class="quiet">Add a calendar link to config.ini to see your upcoming events here.</p>`; return; }
+  if (!c || !c.enabled) { el.innerHTML = `<p class="quiet">Add a calendar link in Settings to see your upcoming events here.</p>`; return; }
   if (!c.data) { el.innerHTML = `<p class="quiet">${c.error ? `Your calendar isn't available: ${esc(c.error)}` : "Loading your calendar…"}</p>`; return; }
 
   const nowS = Date.now() / 1000;
@@ -515,7 +620,7 @@ function renderAgenda() {
 function renderMail() {
   const el = $("#mail");
   const m = DATA?.mail;
-  if (!m || !m.enabled) { el.innerHTML = `<p class="quiet">Add a mailbox to config.ini to see unread mail here.</p>`; return; }
+  if (!m || !m.enabled) { el.innerHTML = `<p class="quiet">Add a mailbox in Settings to see unread mail here.</p>`; return; }
   const d = m.data;
   if (!d) { el.innerHTML = `<p class="quiet">${m.error ? `Mail isn't available: ${esc(m.error)}` : "Checking your mail…"}</p>`; return; }
 
@@ -526,13 +631,47 @@ function renderMail() {
   const head = d.total
     ? `<div class="mail-head"><span class="mail-count">${d.total}</span><span class="mail-word">unread</span>${boxes}</div>`
     : `<div class="mail-head"><span class="mail-count zero">No unread mail</span></div>`;
-  const list = d.messages.map((x) => `
+  const shown = mailMore ? d.messages : d.messages.slice(0, d.show || 4);
+  const list = shown.map((x) => `
     <li class="${(freshUntil.get(x.id) || 0) > now ? "fresh" : ""}">
       <span class="m-from">${esc(x.from)}</span><span class="m-time">${esc(ago(x.ts))}</span>
       <span class="m-subj">${esc(x.subject)}</span>
     </li>`).join("");
   const errors = d.boxes.filter((b) => b.error).map((b) => `<p class="note">${esc(b.name)}: ${esc(b.error)}</p>`).join("");
   el.innerHTML = head + errors + (list ? `<ul class="mail-list">${list}</ul>` : "");
+}
+
+const LIGHT_WORDS = {
+  green: "Claude: nothing running", blue: "Claude is working",
+  yellow: "Claude is done, or waiting for you", red: "Claude hit the session limit",
+};
+function renderClaude() {
+  const c = DATA?.claude, el = $("#light");
+  if (!c || !c.enabled) { el.className = ""; return; }
+  const colour = c.data?.light || "green";
+  el.className = `show ${colour}`;
+  el.setAttribute("aria-label", LIGHT_WORDS[colour] || "Claude status");
+  if (!$("#claude-sheet").hidden) renderClaudeSheet();
+}
+
+function renderClaudeSheet() {
+  const list = DATA?.claude?.data?.sessions || [];
+  const now = Date.now() / 1000;
+  const pcs = new Set(list.map((s) => s.pc).filter(Boolean));   // name the PC only when there are several
+  const rows = list.slice(0, 4).map((s) => {
+    const since = spanText(now - s.since), quiet = now - s.updated;
+    let state = "";
+    if (s.state === "working") state = quiet > 10 * 60 ? `Working, quiet for ${spanText(quiet)}` : `Working for ${since}`;
+    else if (s.state === "attention") state = `Needs your OK, ${since}`;
+    else if (s.state === "done") state = `Done ${since} ago`;
+    else if (s.state === "limit") state = `Session limit reached ${since} ago`;
+    else state = "Idle";
+    const name = pcs.size > 1 && s.pc ? `${s.project} on ${s.pc}` : s.project;
+    return `<div class="cs ${esc(s.state)}"><span class="cs-dot"></span><span class="cs-name">${esc(name)}</span><span class="cs-state">${esc(state)}</span><span class="cs-task">${esc(s.task)}</span></div>`;
+  }).join("");
+  const more = list.length > 4 ? `<p class="quiet">${list.length - 4} more</p>` : "";
+  const legend = `<p class="legend">Green: nothing running. Blue: working. Yellow: done, or needs you. Red: session limit reached.</p>`;
+  $("#claude-sheet").innerHTML = (rows || `<p class="quiet">No Claude sessions reported by the PC.</p>`) + more + legend;
 }
 
 /* ---------- new mail ---------- */
@@ -557,8 +696,9 @@ function showToast(title, body) {
   t.innerHTML = `<strong>${esc(title)}</strong><span>${esc(body)}</span>`;
   t.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove("show"), 30000);
+  toastTimer = setTimeout(hideToast, 30000);
 }
+function hideToast() { clearTimeout(toastTimer); $("#toast").classList.remove("show"); }
 
 function chime() {
   try {
@@ -577,10 +717,85 @@ function chime() {
   } catch (e) { /* no audio device: stay silent */ }
 }
 
+/* ---------- touch ---------- */
+// Everything here is a plain tap. Panels go back to normal by themselves after a minute,
+// so nothing can be left in an odd state.
+const revertTimers = new Map();
+function revertLater(key, ms, fn) { clearTimeout(revertTimers.get(key)); revertTimers.set(key, setTimeout(fn, ms)); }
+
+function pagePanel(el) {   // show the next screenful of a panel; after the last one, back to the top
+  const max = el.scrollHeight - el.clientHeight;
+  const next = el.scrollTop >= max - 2 ? 0 : Math.min(max, el.scrollTop + el.clientHeight * 0.85);
+  el.scrollTop = next;
+  el.classList.toggle("scrolled", next > 0);
+}
+function resetPanel(el) { el.scrollTop = 0; el.classList.remove("scrolled"); }
+
+// A tap at night brightens the screen for two minutes and does nothing else.
+document.addEventListener("click", (e) => {
+  if (!dimmed()) return;
+  wakeUntil = Date.now() + 2 * 60 * 1000;
+  applyDim();
+  revertLater("wake", 2 * 60 * 1000 + 100, applyDim);
+  e.stopPropagation(); e.preventDefault();
+}, true);
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+$("#toast").addEventListener("click", hideToast);
+
+$("#agenda").addEventListener("click", () => {
+  pagePanel($("#agenda"));
+  revertLater("agenda", 60000, () => resetPanel($("#agenda")));
+});
+
+$("#mail").addEventListener("click", () => {
+  const el = $("#mail");
+  if (!mailMore) { mailMore = true; renderMail(); } else pagePanel(el);
+  revertLater("mail", 60000, () => { mailMore = false; resetPanel(el); renderMail(); });
+});
+
+$("#light").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const sheet = $("#claude-sheet");
+  if (!sheet.hidden) { sheet.hidden = true; return; }
+  renderClaudeSheet();
+  sheet.hidden = false;
+  revertLater("claude-sheet", 15000, () => { sheet.hidden = true; });
+});
+$("#claude-sheet").addEventListener("click", (e) => e.stopPropagation());
+
+// The corner button opens a small sheet: Settings, or hide the clock so the desktop can be used.
+function openSheet() {
+  const m = CFG.hide_minutes;
+  $("#sheet-text").textContent = m
+    ? `A hidden clock comes back by itself in ${m} minutes, or sooner if you open PiClock from the desktop.`
+    : "A hidden clock comes back when you open PiClock from the desktop or the menu.";
+  $("#sheet").hidden = false;
+  revertLater("sheet", 15000, closeSheet);
+}
+function closeSheet() { $("#sheet").hidden = true; }
+$("#hide").addEventListener("click", (e) => { e.stopPropagation(); if ($("#sheet").hidden) openSheet(); else closeSheet(); });
+$("#sheet").addEventListener("click", (e) => e.stopPropagation());
+$("#sheet-keep").addEventListener("click", closeSheet);
+$("#sheet-settings").addEventListener("click", () => { location.href = "/settings"; });
+$("#sheet-hide").addEventListener("click", async () => {
+  $("#sheet-text").textContent = "Hiding the clock…";
+  try {
+    const r = await fetch("/api/screen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "hide" }) });
+    if (!r.ok) throw new Error(r.status);
+  } catch (e) {
+    $("#sheet-text").textContent = "Couldn't reach the clock service, so the clock stays.";
+    revertLater("sheet", 5000, closeSheet);
+    return;
+  }
+  revertLater("sheet", 5000, closeSheet);
+});
+document.addEventListener("click", () => { if (!$("#sheet").hidden) closeSheet(); $("#claude-sheet").hidden = true; });
+
 /* ---------- loops ---------- */
 function renderMinute() {
-  renderRibbon(); renderAgenda(); renderMail();
-  $("#dim").style.opacity = isQuietHours() ? CFG.dim_amount : 0;
+  renderRibbon(); renderAgenda(); renderMail(); renderClaude();
+  applyDim();
 }
 
 async function poll() {

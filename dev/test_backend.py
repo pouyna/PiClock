@@ -165,7 +165,8 @@ def test_webcal_links_become_https(app_module):
 # Mail
 # --------------------------------------------------------------------------- #
 class FakeIMAP:
-    def __init__(self, host, port, timeout=None):
+    def __init__(self, host, port, timeout=None, ssl_context=None):
+        assert ssl_context is not None, "the server certificate must be verified"
         if host == "unreachable.example":
             raise OSError("no route")
 
@@ -295,7 +296,7 @@ def test_api_endpoints(app_module):
     r = client.get("/api/all")
     body = r.get_json()
     assert r.headers["Cache-Control"] == "no-store"
-    assert set(body) == {"boot_id", "config", "weather", "mail", "calendar"}
+    assert set(body) == {"boot_id", "config", "weather", "mail", "calendar", "claude", "screen"}
     assert body["mail"] == {"enabled": False}          # nothing configured
     assert body["config"]["clock_24h"] is False
 

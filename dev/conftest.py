@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT))
 _boot_config = Path(tempfile.mkdtemp()) / "config.ini"
 _boot_config.write_text("[server]\nport = 8080\n")
 os.environ["PICLOCK_CONFIG"] = str(_boot_config)
+os.environ["PICLOCK_KEY_FILE"] = str(_boot_config.parent / "secret.key")   # never the real key
 
 
 @pytest.fixture

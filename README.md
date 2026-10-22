@@ -2,9 +2,9 @@
 
 ![PiClock showing the time, weather, today's events and unread mail](docs/preview.png)
 
-A full-screen clock for a Raspberry Pi that also shows the weather, your next calendar events and your unread email. When new mail arrives it shows who it's from and plays a soft chime (silent overnight). The screen dims at night.
+A full-screen clock for a Raspberry Pi that also shows the weather, your next calendar events and your unread email. When new mail arrives it shows who it's from and plays a soft chime (silent overnight). The screen dims at night. On a touchscreen you can tap panels to see more, change every setting on the screen itself, hide the clock to use the desktop, and a small light shows what Claude Code on your PC is doing.
 
-It runs entirely on your Pi. Mail is checked read-only, so nothing gets marked as read.
+It runs entirely on your Pi. Mail is checked read-only, so nothing gets marked as read. Passwords are stored encrypted.
 
 You'll need a Raspberry Pi running **Raspberry Pi OS with desktop** (not Lite), a screen, and an internet connection.
 
@@ -36,15 +36,17 @@ If `raspberrypi.local` doesn't work, use the Pi's IP address instead (find it in
 
 ## 3. Add your weather, calendar and email
 
-Open the settings file:
+**On the touchscreen:** tap the small arrow in the bottom-right corner of the clock, then **Settings**. Tap any value to change it; an on-screen keyboard appears for text. To add a mailbox, tap **Add a mailbox**, pick your provider, type the username and app password, and tap **Check sign-in** to try it before saving. **Save and apply** restarts the clock service and shows whether weather, mail and calendar are working. The screen goes back to the clock by itself after a few minutes without taps.
+
+**From your PC instead:** open the settings file over SSH:
 
 ```
-piclock config
+ssh -t pi@raspberrypi.local piclock config
 ```
 
 Move around with the arrow keys and paste with a right-click. Save with Ctrl+O, Enter, then exit with Ctrl+X. The clock checks the file for mistakes, restarts, and shows you whether weather, mail and calendar are working. The screen updates on its own within 30 seconds.
 
-Prefer editing on your PC? Copy `config.example.ini` to `config.ini`, edit it in Notepad, then send it over with `scp config.ini pi@raspberrypi.local:~/piclock/` and run `ssh -t pi@raspberrypi.local piclock restart`. Don't upload `config.ini` to GitHub.
+Prefer editing in Notepad? Copy `config.example.ini` to `config.ini`, edit it in Notepad, then send it over with `scp config.ini pi@raspberrypi.local:~/piclock/` and run `ssh -t pi@raspberrypi.local piclock restart`. Don't upload `config.ini` to GitHub.
 
 ### Weather
 
@@ -81,6 +83,10 @@ Uncomment the `[email:Personal]` example (remove the `#` at the start of each li
 | Yahoo | `imap.mail.yahoo.com` | Account Info → Account Security → Generate app password |
 | Fastmail | `imap.fastmail.com` | Settings → Privacy & Security → App passwords |
 | Outlook.com / Hotmail | `outlook.office365.com` | Microsoft has been switching off password sign-in for mail apps, so this may not work. |
+
+### How passwords are stored
+
+Passwords and calendar links are encrypted before they are stored in `config.ini`, where they appear as `enc:...`. Anything you type into the file by hand is encrypted the next time the clock starts. The key lives in `~/.config/piclock/secret.key` on the Pi, readable only by the `pi` user. This keeps the secrets out of casual view and out of copies of the file. Someone with full access to the Pi or its SD card could still read both the file and the key, so keep using app passwords, which you can revoke at any time. If the key file is ever lost, the clock says so and you enter the passwords again in Settings.
 
 ## Changing the clock
 
@@ -130,9 +136,29 @@ You can also run any of these straight from your PC without logging in first, fo
 
 ## Everyday use
 
-With a keyboard plugged into the Pi, **Alt+F4** closes the full-screen clock. Bring it back with `piclock show` or a reboot.
+On the touchscreen:
 
-The display settings in `config.ini` let you switch to a 24-hour clock, show seconds, change the overnight dimming hours and brightness, or turn off the chime.
+- Tap the new-mail alert to dismiss it.
+- Tap the mail panel to see more messages, and again for the next page. The agenda works the same way. Both go back to normal by themselves after a minute.
+- Tap anywhere at night to brighten the screen for two minutes.
+- Tap the small arrow at the bottom right for **Settings** or **Hide the clock**. A hidden clock leaves the desktop free to use. It comes back by itself after 30 minutes (change this in Settings), even if the clock service restarts in between, or sooner when you open **PiClock** from the desktop icon or the menu.
+- The light at the bottom left shows what Claude Code on your PC is doing: green means nothing is running, blue means it is working, yellow means it finished or is waiting for you, red means it hit the usage limit. Tap the light for the sessions behind the colour.
+
+With a keyboard plugged into the Pi, **Alt+F4** closes the full-screen clock. Bring it back with `piclock show`, the PiClock icon, or a reboot.
+
+The display settings let you switch to a 24-hour clock, show seconds, change the overnight dimming hours and brightness, or turn off the chime.
+
+## The Claude light
+
+Claude Code on your PC reports what each session is doing through a hook: a small script, `pc/claude_status_hook.py`, that Claude Code runs when you send a prompt, when a tool runs, when it finishes, when it needs your approval, and when it hits a usage limit. The script sends one line to the Pi over the same SSH link you use, and the clock turns the light green, blue, yellow or red. That line carries the state, the project folder's name and the first line of your latest prompt, which the clock shows when you tap the light; the Pi keeps it in a file only the `pi` user can read, and it is part of what anyone on your network could see if you ever set "Reachable from" to the whole network. The script prints nothing, never slows Claude down (it runs in the background with a deadline of its own), and keeps nothing on the PC except a small log in `%LOCALAPPDATA%\PiClock`.
+
+It is already set up on this PC: the hooks are in `C:\Users\Pouyan\.claude\settings.json`. To check the link, run this from PowerShell in the project folder; it sends a test report and removes it again:
+
+```
+py pc\claude_status_hook.py --test
+```
+
+To set it up on another PC: give that PC an SSH key for the Pi (see "Working with the Pi" in CLAUDE.md), put the project folder on it, and add the `hooks` block from `pc/hooks.example.json` to that PC's `~/.claude/settings.json`, with the path to the script changed. The light can be turned off in Settings, under Claude.
 
 ## If something isn't working
 
@@ -158,8 +184,12 @@ piclock = /bin/bash /home/pi/piclock/kiosk.sh
 
 **The screen still goes black after a while:** `sudo raspi-config` → Display Options → Screen Blanking → No, then reboot.
 
-**Want to view it from another computer?** Set `host = 0.0.0.0` in `[server]`, restart, and open `http://raspberrypi.local:8080`. Anyone on your network could then see your mail subjects and calendar.
+**Want to view it from another computer?** Set `host = 0.0.0.0` in `[server]`, restart, and open `http://raspberrypi.local:8080`. Anyone on your network could then see your mail subjects and calendar. Settings and the hide button still work only on the Pi's own screen.
+
+**The light stays yellow or blue after you closed Claude Code:** a session that ends without saying so drops off by itself (a finished one after 6 hours, a working one after 2). If the light never changes at all, look at `%LOCALAPPDATA%\PiClock\hook.log` on the PC: each line says whether the Pi answered.
+
+**Settings says it can't reach the clock service:** run `piclock status` from your PC. After **Save and apply** the service restarts; give it a few seconds.
 
 ## Files
 
-`CLAUDE.md` is the project guide for Claude Code, `dev/` has the tests and preview tools, `app.py` gathers the data, `static/index.html` is the clock screen, `install.sh` sets everything up, `kiosk.sh` opens the browser full screen, `piclock` is the control command and updater, and `config.ini` (on the Pi only) holds your settings. Fonts are Big Shoulders Display and Atkinson Hyperlegible Next, included under the SIL Open Font License.
+`CLAUDE.md` is the project guide for Claude Code, `dev/` has the tests and preview tools, `app.py` gathers the data, `static/index.html` is the clock screen and `static/settings.html` the settings screen, `settings.py` reads and writes the settings file, `vault.py` encrypts the secrets in it, `claude_status.py` keeps the Claude sessions the PC reports, `pc/claude_status_hook.py` is the hook that reports them, `install.sh` sets everything up, `kiosk.sh` opens the browser full screen, `piclock` is the control command and updater, and `config.ini` (on the Pi only) holds your settings. Fonts are Big Shoulders Display and Atkinson Hyperlegible Next, included under the SIL Open Font License.
