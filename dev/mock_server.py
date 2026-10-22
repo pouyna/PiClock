@@ -75,7 +75,7 @@ def sample_mail():
     return {"total": personal + 2 + 1, "messages": msgs[:12], "show": 4,
             "boxes": [{"name": "Personal", "unread": personal, "error": None},
                       {"name": "Work", "unread": 2, "error": None},
-                      {"name": "uic.edu", "unread": 1, "error": None, "note": "Last update from the PC 2 h ago."}]}
+                      {"name": "uic.edu", "unread": 1, "error": None, "note": "from the PC 2 h ago."}]}
 
 
 def sample_claude():

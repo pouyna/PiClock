@@ -97,12 +97,12 @@ def test_api_shows_browser_mailboxes_next_to_the_clocks_own(app_module, tmp_path
 
     # the notes: an old report, a sign-in page, a day of silence
     browser_mail.receive(report(now=now - 20 * 60, seq=now + 0.5), tmp_path, now=now - 20 * 60)
-    assert client.get("/api/all").get_json()["mail"]["data"]["boxes"][0]["note"] == "Last update from the PC 20 min ago."
+    assert client.get("/api/all").get_json()["mail"]["data"]["boxes"][0]["note"] == "from the PC 20 min ago."
     browser_mail.receive(json.dumps({"account": "me@uic.edu", "seq": now + 1, "needs_login": True}), tmp_path, now=now)
-    assert client.get("/api/all").get_json()["mail"]["data"]["boxes"][0]["note"] == "Outlook is asking for a sign-in on the PC."
+    assert client.get("/api/all").get_json()["mail"]["data"]["boxes"][0]["note"] == "needs a sign-in on the PC."
     browser_mail.receive(report(now=now - 2 * DAY, seq=now + 2), tmp_path, now=now - 2 * DAY)
     box = client.get("/api/all").get_json()["mail"]["data"]["boxes"][0]
-    assert box["unread"] is None and box["note"] == "Last update from the PC 2 days ago."
+    assert box["unread"] is None and box["note"] == "from the PC 2 days ago."
 
 
 def test_without_reports_mail_is_as_before(app_module, tmp_path, monkeypatch):

@@ -5,7 +5,17 @@
   if (window.__piclockMail) return;
   window.__piclockMail = true;
   const reader = PiClockReaders.pick(location.hostname);
-  let lastKey = "", lastSent = 0, timer = null, last = null;
+  let lastKey = "", lastSent = 0, timer = null, last = null, sampledAt = 0;
+
+  // A copy of the first row's markup, kept on this PC (%LOCALAPPDATA%\PiClock\sample-*.html) so the
+  // reader can be matched to the page without anyone pasting anything. Once per half hour.
+  function leaveSample() {
+    const row = document.querySelector(PiClockReaders.ROW_SELECTOR);
+    if (!row || Date.now() - sampledAt < 30 * 60 * 1000) return;
+    sampledAt = Date.now();
+    const html = `<!-- ${document.title} | ${location.href} -->\n` + row.outerHTML.slice(0, 20000);
+    chrome.runtime.sendMessage({ type: "sample-file", name: reader.name, html }).catch(() => {});
+  }
 
   function snapshot() {
     try { return reader.read(document, location); } catch (err) { return null; }
@@ -23,6 +33,7 @@
     lastSent = now;
     try {
       await chrome.runtime.sendMessage({ type: "report", report: r, reader: reader.name });
+      leaveSample();
     } catch (err) {
       // The extension was reloaded or its worker is asleep; the next change tries again.
     }

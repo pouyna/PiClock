@@ -9,6 +9,7 @@ const PiClockReaders = (() => {
   const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
   const TIME_TEXT = /^(\d{1,2}:\d{2}|\d{1,2}\/\d{1,2}|(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Yesterday|Today)\b)/i;
   const MAX = 20;
+  const INITIALS = /^[A-Z]{1,3}$/;   // an avatar's initials, not a line of mail
   const tidy = (s) => (s || "").replace(/\s+/g, " ").trim();
   const text = (el) => tidy(el && el.textContent);
   const attr = (el, name) => (el && el.getAttribute(name)) || "";
@@ -75,20 +76,21 @@ const PiClockReaders = (() => {
     if (!rows.length) return null;
     const parsed = [];
     for (const row of rows.slice(0, 60)) {
+      // The sender is the span whose tooltip holds an address. Everything else comes from the row's
+      // text lines in page order: sender, subject, preview, time. The avatar's initials ("TG") and
+      // the words "Unread"/"Read" are not lines of mail.
       const spans = Array.from(row.querySelectorAll("span[title], span[aria-label]"));
-      let senderEl = spans.find((s) => EMAIL.test(attr(s, "title")) || EMAIL.test(attr(s, "aria-label"))) || null;
-      let timeEl = spans.slice().reverse().find((s) => s !== senderEl && TIME_TEXT.test(text(s))) || row.querySelector("time") || null;
-      let subjectEl = spans.find((s) => s !== senderEl && s !== timeEl && text(s).length > 0) || null;
+      const senderEl = spans.find((sp) => EMAIL.test(attr(sp, "title")) || EMAIL.test(attr(sp, "aria-label"))) || null;
+      const lines = leaves(row).filter((l) => !/^(unread|read)$/i.test(l.text) && !INITIALS.test(l.text)
+        && !l.el.closest('[class*="ersona"], [class*="vatar"], [class*="Avatar"]'));
+      const timeLine = lines.slice().reverse().find((l) => TIME_TEXT.test(l.text)) || null;
       let from = text(senderEl) || attr(senderEl, "title");
-      let subject = text(subjectEl) || attr(subjectEl, "title");
-      if (!from || !subject) {   // no tooltips: the row's text lines, in the order the page shows them
-        const lines = leaves(row).filter((l) => !/^(unread|read)$/i.test(l.text));
-        const timeLine = lines.slice().reverse().find((l) => TIME_TEXT.test(l.text)) || null;
-        const rest = lines.filter((l) => l !== timeLine);
-        if (!timeEl && timeLine) timeEl = timeLine.el;
-        if (!from && rest[0]) { from = rest[0].text; senderEl = senderEl || rest[0].el; }
-        if (!subject && rest[1]) { subject = rest[1].text; subjectEl = subjectEl || rest[1].el; }
-      }
+      const rest = lines.filter((l) => l !== timeLine && !(senderEl && senderEl.contains(l.el)) && (!from || l.text !== from));
+      if (!from && rest.length) from = rest.shift().text;
+      const subjectLine = rest[0] || null;
+      const subject = subjectLine ? subjectLine.text : "";
+      const subjectEl = subjectLine ? subjectLine.el : null;
+      const timeEl = timeLine ? (timeLine.el.closest("[title], time") || timeLine.el) : null;
       const label = attr(row, "aria-label");
       if (!from) from = tidy(label.split(",")[0]);
       // The cues for unread. "Mark as unread" is the action a READ row offers, so it must not count.

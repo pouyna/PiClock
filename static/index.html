@@ -219,14 +219,13 @@
   .mail-count.zero { font-size: calc(var(--u) * 3); line-height: 1; }
   .mail-word { color: var(--mist); font-size: calc(var(--u) * 2.4); }
   /* the mailbox names: tappable, to show one mailbox, several, or all */
-  .mail-boxes { display: flex; flex-wrap: wrap; column-gap: calc(var(--u) * 0.4); color: var(--haze); margin-left: calc(var(--u) * 0.6); }
-  .mail-boxes button {
-    font: inherit; color: inherit; background: none; border: 0; cursor: none; border-radius: calc(var(--u) * 0.8);
-    padding: calc(var(--u) * 1.15) calc(var(--u) * 0.7); margin: calc(var(--u) * -1.15) 0;   /* finger-sized without moving the line */
+  .mail-boxes { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 0.6); width: 100%; margin-top: calc(var(--u) * 0.5); }
+  .mail-boxes button {   /* pills, clearly separate from the panel's own tap; finger-high, narrow enough for three on a line */
+    font: inherit; font-size: calc(var(--u) * 1.7); line-height: 1; color: var(--mist); background: var(--dusk); border: 0; cursor: none;
+    border-radius: calc(var(--u) * 2.3); padding: 0 calc(var(--u) * 1.1); min-height: calc(var(--u) * 4.6);
   }
-  .mail-boxes button.on { color: var(--bone); }
-  .mail-boxes button.off { opacity: 0.55; }
-  .mail-boxes button.all { color: var(--mist); }
+  .mail-boxes button.on { background: var(--bone); color: var(--night); }
+  .mail-boxes button.off { color: var(--haze); }
   .mail-list { list-style: none; margin: calc(var(--u) * 1) 0 0; padding: 0; }
   .mail-list li {
     display: grid;
@@ -669,7 +668,7 @@ function renderMail() {
   const shown = mailMore ? sel.visible : sel.visible.slice(0, d.show || 4);
   const list = shown.map((x) => `
     <li class="${(freshUntil.get(x.id) || 0) > now ? "fresh" : ""}">
-      <span class="m-from">${esc(x.from)}</span><span class="m-time">${esc(x.when || ago(x.ts))}</span>
+      <span class="m-from">${esc(x.from)}</span><span class="m-time">${esc(ago(x.ts) || x.when || "")}</span>
       <span class="m-subj">${esc(x.subject)}</span>
     </li>`).join("");
   const errors = d.boxes.filter((b) => (b.error || b.note) && (!sel.chosen || sel.chosen.has(b.name))).map((b) => `<p class="note">${esc(b.name)}: ${esc(b.error || b.note)}</p>`).join("");

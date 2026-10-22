@@ -31,6 +31,14 @@ def test_ping_send_and_bad_messages():
     assert host.handle({"id": 5, "cmd": "send", "report": {"account": "x"}}, sender=failing, pc="PC") == {"id": 5, "ok": False, "detail": "the Pi didn't answer in time"}
 
 
+def test_sample_is_kept_on_the_pc(tmp_path, monkeypatch):
+    monkeypatch.setattr(host, "STATE_DIR", tmp_path)
+    r = host.handle({"id": 7, "cmd": "sample", "name": "Outlook/../x", "html": "<div>row</div>" + "x" * 40000})
+    assert r == {"id": 7, "ok": True, "detail": "sample kept"}
+    files = list(tmp_path.iterdir())
+    assert [f.name for f in files] == ["sample-Outlook----x.html"] and files[0].stat().st_size == 30000
+
+
 def test_framing_round_trip():
     out = io.BytesIO()
     host.write_message(out, {"id": 1, "ok": True})

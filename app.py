@@ -441,11 +441,11 @@ def mail_snapshot():
     for b in extra:
         note = None
         if b["needs_login"]:
-            note = f"{b['provider']} is asking for a sign-in on the PC."
+            note = "needs a sign-in on the PC."
         elif now - b["updated"] > browser_mail.STALE_SECONDS:
-            note = f"Last update from the PC {age_text(now - b['updated'])} ago."
+            note = f"from the PC {age_text(now - b['updated'])} ago."
         if b["unread"] is None:   # nothing read for a day: the mail is probably read by now
-            boxes.append({"name": b["label"], "unread": None, "error": None, "note": note or "No update from the PC for a day."})
+            boxes.append({"name": b["label"], "unread": None, "error": None, "note": note or "nothing from the PC for a day."})
             continue
         boxes.append({"name": b["label"], "unread": b["unread"], "error": None, "note": note})
         total += b["unread"]

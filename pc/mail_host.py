@@ -63,6 +63,14 @@ def handle(msg, sender=send, pc=None):
     cmd = msg.get("cmd") if isinstance(msg, dict) else None
     if cmd == "ping":
         return {"id": ident, "ok": True, "detail": "ready"}
+    if cmd == "sample":   # a copy of one row of the mail list, for matching the reader to the page
+        name = "".join(ch if ch.isalnum() else "-" for ch in str(msg.get("name") or "page"))[:30] or "page"
+        try:
+            STATE_DIR.mkdir(parents=True, exist_ok=True)
+            (STATE_DIR / f"sample-{name}.html").write_text(str(msg.get("html") or "")[:30000], encoding="utf-8")
+        except OSError as exc:
+            return {"id": ident, "ok": False, "detail": f"couldn't keep the sample: {exc}"}
+        return {"id": ident, "ok": True, "detail": "sample kept"}
     if cmd == "send":
         report = msg.get("report")
         if not isinstance(report, dict) or not report.get("account"):

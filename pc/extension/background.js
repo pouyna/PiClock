@@ -104,6 +104,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
     report: () => handleReport(msg.report, sender),
     forget: () => forget(msg.account),
     ping: () => ask({ cmd: "ping" }),
+    "sample-file": () => ask({ cmd: "sample", name: String(msg.name || "page"), html: String(msg.html || "") }),
     watch: () => watch(msg.origin),
   };
   const job = jobs[msg && msg.type];
