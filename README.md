@@ -142,7 +142,7 @@ On the touchscreen:
 - Tap the mail panel to see more messages, and again for the next page. The agenda works the same way. Both go back to normal by themselves after a minute.
 - Tap anywhere at night to brighten the screen for two minutes.
 - Tap the small arrow at the bottom right for **Settings** or **Hide the clock**. A hidden clock leaves the desktop free to use. It comes back by itself after 30 minutes (change this in Settings), even if the clock service restarts in between, or sooner when you open **PiClock** from the desktop icon or the menu.
-- The light at the bottom left shows what Claude Code on your PC is doing: green means nothing is running, blue means it is working, yellow means it finished or is waiting for you, red means it hit the usage limit. Tap the light for the sessions behind the colour.
+- Claude's mark at the bottom left lights up to show what Claude Code on your PC is doing: green means nothing is running, blue means it is working, yellow means it finished or is waiting for you, red means it hit the usage limit. Tap it for the sessions behind the colour.
 
 With a keyboard plugged into the Pi, **Alt+F4** closes the full-screen clock. Bring it back with `piclock show`, the PiClock icon, or a reboot.
 
@@ -150,7 +150,7 @@ The display settings let you switch to a 24-hour clock, show seconds, change the
 
 ## The Claude light
 
-Claude Code on your PC reports what each session is doing through a hook: a small script, `pc/claude_status_hook.py`, that Claude Code runs when you send a prompt, when a tool runs, when it finishes, when it needs your approval, and when it hits a usage limit. The script sends one line to the Pi over the same SSH link you use, and the clock turns the light green, blue, yellow or red. That line carries the state, the project folder's name and the first line of your latest prompt, which the clock shows when you tap the light; the Pi keeps it in a file only the `pi` user can read, and it is part of what anyone on your network could see if you ever set "Reachable from" to the whole network. The script prints nothing, never slows Claude down (it runs in the background with a deadline of its own), and keeps nothing on the PC except a small log in `%LOCALAPPDATA%\PiClock`.
+Claude Code on your PC reports what each session is doing through a hook: a small script, `pc/claude_status_hook.py`, that Claude Code runs when you send a prompt, when a tool runs, when it finishes, when it needs your approval, and when it hits a usage limit. The script sends one line to the Pi over the same SSH link you use, and the clock lights Claude's mark at the bottom left green, blue, yellow or red. That line carries the state, the project folder's name and the first line of your latest prompt, which the clock shows when you tap the mark; the Pi keeps it in a file only the `pi` user can read, and it is part of what anyone on your network could see if you ever set "Reachable from" to the whole network. The script prints nothing, never slows Claude down (it runs in the background with a deadline of its own), and keeps nothing on the PC except a small log in `%LOCALAPPDATA%\PiClock`.
 
 It is already set up on this PC: the hooks are in `C:\Users\Pouyan\.claude\settings.json`. To check the link, run this from PowerShell in the project folder; it sends a test report and removes it again:
 
