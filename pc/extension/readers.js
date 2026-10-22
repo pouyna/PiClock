@@ -73,9 +73,8 @@ const PiClockReaders = (() => {
     if (/^login\./.test(loc.hostname)) return { provider: "Outlook", needs_login: true };
     const rows = outlookRows(doc);
     if (!rows.length) return null;
-    const messages = [];
-    for (const row of rows) {
-      if (messages.length >= MAX) break;
+    const parsed = [];
+    for (const row of rows.slice(0, 60)) {
       const spans = Array.from(row.querySelectorAll("span[title], span[aria-label]"));
       let senderEl = spans.find((s) => EMAIL.test(attr(s, "title")) || EMAIL.test(attr(s, "aria-label"))) || null;
       let timeEl = spans.slice().reverse().find((s) => s !== senderEl && TIME_TEXT.test(text(s))) || row.querySelector("time") || null;
@@ -91,11 +90,21 @@ const PiClockReaders = (() => {
         if (!subject && rest[1]) { subject = rest[1].text; subjectEl = subjectEl || rest[1].el; }
       }
       const label = attr(row, "aria-label");
-      const unread = /\bunread\b/i.test(label) || bold(senderEl) || bold(subjectEl)
-        || !!row.querySelector('[title="Mark as read"], [aria-label="Mark as read"], [aria-label*="unread" i]');
-      if (!unread) continue;
       if (!from) from = tidy(label.split(",")[0]);
-      messages.push(message(attr(row, "data-convid") || attr(row, "data-item-id") || row.id || attr(row, "data-list-index"), from, subject, timeEl));
+      // The cues for unread. "Mark as unread" is the action a READ row offers, so it must not count.
+      const saysUnread = /\bunread\b/i.test(label) || !!row.querySelector('[aria-label="Unread" i], [title="Unread" i]');
+      const offersMarkRead = !!row.querySelector('[title="Mark as read" i], [aria-label="Mark as read" i]');
+      const offersMarkUnread = !!row.querySelector('[title="Mark as unread" i], [aria-label="Mark as unread" i]');
+      parsed.push({ row, from, subject, timeEl, saysUnread, offersMarkRead, offersMarkUnread, bold: bold(senderEl) || bold(subjectEl) });
+    }
+    // Bold only means unread when the list also has rows that aren't bold.
+    const boldTells = parsed.some((r) => r.bold) && parsed.some((r) => !r.bold);
+    const messages = [];
+    for (const r of parsed) {
+      if (messages.length >= MAX) break;
+      const unread = !r.offersMarkUnread && (r.saysUnread || r.offersMarkRead || (boldTells && r.bold));
+      if (!unread) continue;
+      messages.push(message(attr(r.row, "data-convid") || attr(r.row, "data-item-id") || r.row.id || attr(r.row, "data-list-index"), r.from, r.subject, r.timeEl));
     }
     const me = doc.querySelector('#O365_MainLink_Me, [id$="MainLink_Me"], button[aria-label*="Account manager"]');
     const account = accountFrom(doc.title, attr(me, "aria-label"), attr(me, "title"));

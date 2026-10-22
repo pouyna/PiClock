@@ -106,7 +106,7 @@ def read_mock(browser, html_name, expression):
 def test_outlook_reader_takes_the_unread_rows(browser):
     r = read_mock(browser, "outlook.html", "PiClockReaders.pick('outlook.office.com').read(document, {hostname: 'outlook.office.com', hash: ''})")
     assert r["provider"] == "Outlook" and r["account"] == "outlook.office.com" and r["unread"] == 2
-    assert [m["id"] for m in r["messages"]] == ["AAQkADc1", "AAQkADc3"]     # unread by label, unread by bold; the read one skipped
+    assert [m["id"] for m in r["messages"]] == ["AAQkADc1", "AAQkADc3"]     # unread by label, unread by bold; the read rows skipped, even the bold one that offers "Mark as unread"
     first = r["messages"][0]
     assert first["from"] == "Priya Raman" and first["subject"] == "Re: Saturday hike, still on?"
     assert first["when"] == "9:12 AM" and isinstance(first["ts"], int)       # the tooltip's full date
