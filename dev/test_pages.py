@@ -87,11 +87,14 @@ def test_mailbox_names_filter_the_mail_panel(preview, browser):
     page.locator(".mail-boxes button", has_text="Personal").click()                   # add a second mailbox
     page.wait_for_function("document.querySelector('.mail-count').textContent === '7'")
     assert page.locator(".mail-boxes button.on").count() == 2
+    page.locator(".mail-boxes button", has_text="uic.edu").click()                    # all three chosen: still a choice, All still offered
+    page.wait_for_function("document.querySelectorAll('.mail-boxes button.on').length === 3")
+    assert page.locator(".mail-count").inner_text() == "8" and page.locator(".mail-boxes button.all").count() == 1
     page.goto(f"{preview}/")                                                         # the choice survives a reload
-    page.wait_for_function("document.querySelector('.mail-count').textContent === '7'")
+    page.wait_for_function("document.querySelectorAll('.mail-boxes button.on').length === 3")
     page.locator(".mail-boxes button.all").click()
-    page.wait_for_function("document.querySelector('.mail-count').textContent === '8'")
-    assert page.locator(".mail-boxes button.all").count() == 0
+    page.wait_for_function("document.querySelectorAll('.mail-boxes button.on').length === 0")
+    assert page.locator(".mail-boxes button.all").count() == 0 and page.locator(".mail-count").inner_text() == "8"
     page.close()
 
 
@@ -132,6 +135,14 @@ def test_outlook_reader_takes_the_unread_rows(browser):
     assert first["from"] == "Priya Raman" and first["subject"] == "Re: Saturday hike, still on?"
     assert first["when"] == "9:12 AM" and isinstance(first["ts"], int)       # the tooltip's full date
     assert r["messages"][1]["when"] == "Mon 10/19"
+
+
+def test_outlook_reader_on_the_2026_row_structure(browser):
+    """Icon glyphs, action buttons, the avatar and the preview are not the subject; a read row is skipped."""
+    r = read_mock(browser, "outlook_2026.html", "PiClockReaders.pick('outlook.cloud.microsoft').read(document, {hostname: 'outlook.cloud.microsoft', hash: ''})")
+    assert r["provider"] == "Outlook" and r["unread"] == 1
+    assert [(m["id"], m["from"], m["subject"], m["when"]) for m in r["messages"]] == [("AAQkADd0", "Priya Raman", "Re: Saturday hike, still on?", "9:12 AM")]
+    assert isinstance(r["messages"][0]["ts"], int)
 
 
 def test_outlook_reader_copes_without_tooltips_or_ids(browser):

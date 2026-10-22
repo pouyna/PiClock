@@ -46,7 +46,10 @@ const PiClockReaders = (() => {
     let node;
     while ((node = walker.nextNode())) {
       const t = tidy(node.nodeValue);
-      if (t) out.push({ text: t, el: node.parentElement });
+      const el = node.parentElement;
+      if (!t || !/[\p{L}\p{N}]/u.test(t)) continue;   // Outlook's icons are font glyphs: text without a letter or digit
+      if (el && el.closest('[aria-hidden="true"], button, input, label, [role="checkbox"], [role="img"]')) continue;   // icons, actions, the avatar
+      out.push({ text: t, el });
     }
     return out;
   }

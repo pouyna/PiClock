@@ -629,7 +629,7 @@ function mailSelection(d) {
   const okBoxes = d.boxes.filter((b) => !b.error);
   const wanted = new Set(DATA?.prefs?.mail_filter || []);
   const active = okBoxes.filter((b) => wanted.has(b.name));
-  const chosen = active.length && active.length < okBoxes.length ? new Set(active.map((b) => b.name)) : null;
+  const chosen = active.length ? new Set(active.map((b) => b.name)) : null;
   return {
     okBoxes, chosen,
     visible: chosen ? d.messages.filter((x) => chosen.has(x.mailbox)) : d.messages,
@@ -644,7 +644,6 @@ function toggleMailbox(name) {
   if (!name) sel = [];
   else if (sel.includes(name)) sel = sel.filter((n) => n !== name);
   else sel = [...sel, name];
-  if (sel.length >= names.length) sel = [];   // everything chosen is the same as all
   DATA.prefs = { ...(DATA.prefs || {}), mail_filter: sel };
   renderMail();
   fetch("/api/prefs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mail_filter: sel }) }).catch(() => {});
