@@ -151,6 +151,15 @@ def settings_check():
     return jsonify({"ok": True, "unread": 3})
 
 
+PREFS = {"mail_filter": []}
+
+
+@app.post("/api/prefs")
+def prefs():
+    PREFS["mail_filter"] = list((request.get_json(silent=True) or {}).get("mail_filter") or [])
+    return jsonify({"ok": True, "prefs": PREFS})
+
+
 @app.post("/api/screen")
 def screen():
     action = (request.get_json(silent=True) or {}).get("action")
@@ -178,7 +187,7 @@ def all_data():
         weather, mail = ok(sample_weather()), ok(sample_mail())
         calendar = ok({"days": 7, "events": sample_events(), "errors": []})
     return jsonify({"boot_id": "preview", "config": config, "weather": weather, "mail": mail,
-                    "calendar": calendar, "claude": claude, "screen": {"hidden_until": None}})
+                    "calendar": calendar, "claude": claude, "screen": {"hidden_until": None}, "prefs": PREFS})
 
 
 if __name__ == "__main__":

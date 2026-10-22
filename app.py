@@ -9,6 +9,7 @@ serves everything to the full-screen clock page at http://127.0.0.1:8080.
 import configparser
 import email
 import imaplib
+import json
 import logging
 import os
 import re
@@ -36,6 +37,8 @@ BASE = Path(__file__).resolve().parent
 CONFIG_PATH = Path(os.environ.get("PICLOCK_CONFIG", BASE / "config.ini"))  # tests point this elsewhere
 CLAUDE_DIR = Path(os.environ.get("PICLOCK_CLAUDE_DIR", BASE / "claude"))   # session reports from the PC
 BROWSER_MAIL_DIR = Path(os.environ.get("PICLOCK_MAIL_DIR", BASE / "mail"))   # mailboxes read by the PC's browser extension
+PREFS_FILE = Path(os.environ.get("PICLOCK_PREFS", BASE / "prefs.json"))   # choices made by touch on the clock, kept across restarts
+PREFS_LOCK = threading.Lock()
 BOOT_ID = str(int(time.time()))  # the page reloads itself when this changes
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -596,6 +599,7 @@ def all_data():
         "calendar": snapshot("calendar"),
         "claude": claude_snapshot(),
         "screen": {"hidden_until": SCREEN["hidden_until"]},
+        "prefs": read_prefs(),
     })
     resp.headers["Cache-Control"] = "no-store"
     return resp
@@ -604,6 +608,44 @@ def all_data():
 def local_only():
     """Settings and the hide button are for the Pi's own screen, even when host = 0.0.0.0."""
     return request.remote_addr in ("127.0.0.1", "::1")
+
+
+def read_prefs():
+    try:
+        with open(PREFS_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def write_prefs(data):
+    tmp = PREFS_FILE.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+    try:
+        os.chmod(tmp, 0o600)
+    except OSError:
+        pass
+    os.replace(tmp, PREFS_FILE)
+
+
+@app.post("/api/prefs")
+def prefs():
+    """Choices made by touch on the clock: which mailboxes the mail panel shows (an empty list means all)."""
+    if not local_only():
+        return jsonify({"error": "Only the Pi's own screen can change this."}), 403
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Expected JSON."}), 400
+    names = body.get("mail_filter")
+    if not isinstance(names, list) or len(names) > 20 or not all(isinstance(n, str) and 0 < len(n) <= 60 for n in names):
+        return jsonify({"error": "mail_filter must be a list of mailbox names"}), 400
+    with PREFS_LOCK:
+        data = read_prefs()
+        data["mail_filter"] = sorted(set(names))
+        write_prefs(data)
+    return jsonify({"ok": True, "prefs": data})
 
 
 @app.post("/api/screen")

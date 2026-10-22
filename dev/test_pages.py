@@ -74,6 +74,27 @@ def test_settings_scrolls_under_a_mouse_drag(preview, browser):
     page.close()
 
 
+def test_mailbox_names_filter_the_mail_panel(preview, browser):
+    page = browser.new_page(viewport={"width": 1280, "height": 800})
+    page.goto(f"{preview}/")
+    page.wait_for_selector(".mail-boxes button")
+    assert page.locator(".mail-count").inner_text() == "8"
+    page.locator(".mail-boxes button", has_text="Work").click()
+    page.wait_for_function("document.querySelector('.mail-count').textContent === '2'")
+    assert page.locator(".mail-list li").count() == 2                                   # only Work's two messages
+    assert page.locator(".mail-boxes button.on").inner_text().startswith("Work")
+    assert page.locator(".mail-boxes button.all").inner_text() == "All"
+    page.locator(".mail-boxes button", has_text="Personal").click()                   # add a second mailbox
+    page.wait_for_function("document.querySelector('.mail-count').textContent === '7'")
+    assert page.locator(".mail-boxes button.on").count() == 2
+    page.goto(f"{preview}/")                                                         # the choice survives a reload
+    page.wait_for_function("document.querySelector('.mail-count').textContent === '7'")
+    page.locator(".mail-boxes button.all").click()
+    page.wait_for_function("document.querySelector('.mail-count').textContent === '8'")
+    assert page.locator(".mail-boxes button.all").count() == 0
+    page.close()
+
+
 def test_settings_leaves_real_touch_to_the_browser(preview, browser):
     """With mouse emulation off, the browser scrolls touch itself; the page must not scroll it twice."""
     page = browser.new_page(viewport={"width": 1280, "height": 800})

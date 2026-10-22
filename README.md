@@ -155,6 +155,7 @@ On the touchscreen:
 - Tap the new-mail alert to dismiss it.
 - Tap the mail panel to see more messages, and again for the next page. The agenda works the same way. Both go back to normal by themselves after a minute.
 - Tap anywhere at night to brighten the screen for two minutes.
+- Tap a mailbox name in the mail panel's header to show only that mailbox; tap more names to add them, and **All** to go back to everything. The clock remembers this choice, and the chime follows it: a hidden mailbox doesn't alert.
 - Tap the small arrow at the bottom right for **Settings** or **Hide the clock**. A hidden clock leaves the desktop free to use. It comes back by itself after 30 minutes (change this in Settings), even if the clock service restarts in between, or sooner when you open **PiClock** from the desktop icon or the menu.
 - Claude's mark at the bottom left lights up to show what Claude Code on your PC is doing: green means nothing is running, blue means it is working, yellow means it finished or is waiting for you, red means it hit the usage limit. Tap it for the sessions behind the colour.
 

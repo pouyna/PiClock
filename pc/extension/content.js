@@ -49,12 +49,15 @@
 
   // The popup asks for a fresh read, or for a sample of the page to send to whoever maintains the reader.
   chrome.runtime.onMessage.addListener((msg, sender, respond) => {
+    // The popup's question reaches every frame of the tab; a side frame without a mail list stays quiet.
     if (msg.type === "read-now") {
+      if (window !== window.top && !snapshot()) return false;
       tick(true).then(() => respond({ reader: reader.name, report: last }));
       return true;
     }
     if (msg.type === "sample") {
       const row = document.querySelector(PiClockReaders.ROW_SELECTOR);
+      if (window !== window.top && !row) return false;
       respond({ reader: reader.name, title: document.title, url: location.href, frame: window === window.top ? "top" : "child frame",
                 sample: row ? row.outerHTML.slice(0, 6000) : "(no mail row found in this frame)", page: row ? null : PiClockReaders.describe(document) });
       return false;

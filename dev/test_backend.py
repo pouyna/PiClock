@@ -296,7 +296,7 @@ def test_api_endpoints(app_module):
     r = client.get("/api/all")
     body = r.get_json()
     assert r.headers["Cache-Control"] == "no-store"
-    assert set(body) == {"boot_id", "config", "weather", "mail", "calendar", "claude", "screen"}
+    assert set(body) == {"boot_id", "config", "weather", "mail", "calendar", "claude", "screen", "prefs"}
     assert body["mail"] == {"enabled": False}          # nothing configured
     assert body["config"]["clock_24h"] is False
 

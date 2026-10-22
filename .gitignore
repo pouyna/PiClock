@@ -5,6 +5,7 @@ config.ini
 .venv/
 .update-skip
 .screen-hidden
+prefs.json
 claude/
 mail/
 __pycache__/

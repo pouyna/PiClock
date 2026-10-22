@@ -218,7 +218,15 @@
   }
   .mail-count.zero { font-size: calc(var(--u) * 3); line-height: 1; }
   .mail-word { color: var(--mist); font-size: calc(var(--u) * 2.4); }
-  .mail-boxes { display: flex; column-gap: calc(var(--u) * 1.6); color: var(--haze); margin-left: calc(var(--u) * 1); }
+  /* the mailbox names: tappable, to show one mailbox, several, or all */
+  .mail-boxes { display: flex; flex-wrap: wrap; column-gap: calc(var(--u) * 0.4); color: var(--haze); margin-left: calc(var(--u) * 0.6); }
+  .mail-boxes button {
+    font: inherit; color: inherit; background: none; border: 0; cursor: none; border-radius: calc(var(--u) * 0.8);
+    padding: calc(var(--u) * 1.15) calc(var(--u) * 0.7); margin: calc(var(--u) * -1.15) 0;   /* finger-sized without moving the line */
+  }
+  .mail-boxes button.on { color: var(--bone); }
+  .mail-boxes button.off { opacity: 0.55; }
+  .mail-boxes button.all { color: var(--mist); }
   .mail-list { list-style: none; margin: calc(var(--u) * 1) 0 0; padding: 0; }
   .mail-list li {
     display: grid;
@@ -617,6 +625,32 @@ function renderAgenda() {
   el.innerHTML = errors + html;
 }
 
+// Which mailboxes the panel shows: the names chosen by touch (kept on the Pi), or all of them.
+function mailSelection(d) {
+  const okBoxes = d.boxes.filter((b) => !b.error);
+  const wanted = new Set(DATA?.prefs?.mail_filter || []);
+  const active = okBoxes.filter((b) => wanted.has(b.name));
+  const chosen = active.length && active.length < okBoxes.length ? new Set(active.map((b) => b.name)) : null;
+  return {
+    okBoxes, chosen,
+    visible: chosen ? d.messages.filter((x) => chosen.has(x.mailbox)) : d.messages,
+    total: chosen ? active.reduce((n, b) => n + (b.unread || 0), 0) : d.total,
+  };
+}
+function toggleMailbox(name) {
+  const d = DATA?.mail?.data;
+  if (!d) return;
+  const names = d.boxes.filter((b) => !b.error).map((b) => b.name);
+  let sel = (DATA.prefs?.mail_filter || []).filter((n) => names.includes(n));
+  if (!name) sel = [];
+  else if (sel.includes(name)) sel = sel.filter((n) => n !== name);
+  else sel = [...sel, name];
+  if (sel.length >= names.length) sel = [];   // everything chosen is the same as all
+  DATA.prefs = { ...(DATA.prefs || {}), mail_filter: sel };
+  renderMail();
+  fetch("/api/prefs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mail_filter: sel }) }).catch(() => {});
+}
+
 function renderMail() {
   const el = $("#mail");
   const m = DATA?.mail;
@@ -625,19 +659,20 @@ function renderMail() {
   if (!d) { el.innerHTML = `<p class="quiet">${m.error ? `Mail isn't available: ${esc(m.error)}` : "Checking your mail…"}</p>`; return; }
 
   const now = Date.now();
-  const okBoxes = d.boxes.filter((b) => !b.error);
-  const boxes = d.boxes.length > 1 && okBoxes.length
-    ? `<span class="mail-boxes">${okBoxes.map((b) => `<span>${esc(b.name)} ${b.unread}</span>`).join("")}</span>` : "";
-  const head = d.total
-    ? `<div class="mail-head"><span class="mail-count">${d.total}</span><span class="mail-word">unread</span>${boxes}</div>`
-    : `<div class="mail-head"><span class="mail-count zero">No unread mail</span></div>`;
-  const shown = mailMore ? d.messages : d.messages.slice(0, d.show || 4);
+  const sel = mailSelection(d);
+  const chip = (b) => `<button class="${sel.chosen ? (sel.chosen.has(b.name) ? "on" : "off") : ""}" data-box="${esc(b.name)}">${esc(b.name)} ${b.unread ?? ""}</button>`;
+  const boxes = d.boxes.length > 1 && sel.okBoxes.length
+    ? `<span class="mail-boxes">${sel.chosen ? `<button class="all" data-box="">All</button>` : ""}${sel.okBoxes.map(chip).join("")}</span>` : "";
+  const head = sel.total
+    ? `<div class="mail-head"><span class="mail-count">${sel.total}</span><span class="mail-word">unread</span>${boxes}</div>`
+    : `<div class="mail-head"><span class="mail-count zero">No unread mail</span>${boxes}</div>`;
+  const shown = mailMore ? sel.visible : sel.visible.slice(0, d.show || 4);
   const list = shown.map((x) => `
     <li class="${(freshUntil.get(x.id) || 0) > now ? "fresh" : ""}">
       <span class="m-from">${esc(x.from)}</span><span class="m-time">${esc(x.when || ago(x.ts))}</span>
       <span class="m-subj">${esc(x.subject)}</span>
     </li>`).join("");
-  const errors = d.boxes.filter((b) => b.error || b.note).map((b) => `<p class="note">${esc(b.name)}: ${esc(b.error || b.note)}</p>`).join("");
+  const errors = d.boxes.filter((b) => (b.error || b.note) && (!sel.chosen || sel.chosen.has(b.name))).map((b) => `<p class="note">${esc(b.name)}: ${esc(b.error || b.note)}</p>`).join("");
   el.innerHTML = head + errors + (list ? `<ul class="mail-list">${list}</ul>` : "");
 }
 
@@ -676,7 +711,7 @@ function renderClaudeSheet() {
 
 /* ---------- new mail ---------- */
 function checkForNewMail() {
-  const msgs = DATA?.mail?.data?.messages;
+  const msgs = DATA?.mail?.data ? mailSelection(DATA.mail.data).visible : null;   // hidden mailboxes don't alert
   if (!msgs) return;
   if (seenMail === null) { seenMail = new Set(msgs.map((m) => m.id)); return; }  // first check: no alert
   const fresh = msgs.filter((m) => !seenMail.has(m.id));
@@ -748,8 +783,10 @@ $("#agenda").addEventListener("click", () => {
   revertLater("agenda", 60000, () => resetPanel($("#agenda")));
 });
 
-$("#mail").addEventListener("click", () => {
+$("#mail").addEventListener("click", (e) => {
   const el = $("#mail");
+  const chip = e.target.closest(".mail-boxes button");
+  if (chip) { toggleMailbox(chip.dataset.box); return; }   // a remembered choice, not a passing tap
   if (!mailMore) { mailMore = true; renderMail(); } else pagePanel(el);
   revertLater("mail", 60000, () => { mailMore = false; resetPanel(el); renderMail(); });
 });
