@@ -31,11 +31,21 @@
     clearTimeout(timer);
     timer = setTimeout(() => tick(false), 2000);
   }
-  new MutationObserver(schedule).observe(document.documentElement, {
-    childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["aria-label", "title", "class"],
-  });
-  setInterval(() => tick(false), 60 * 1000);
-  setTimeout(() => tick(true), 3000);
+  // Watching the whole page would make a busy webmail page lag: only the message list is
+  // observed, for rows coming and going, and everything else is caught by a check every 15 s.
+  let watched = null;
+  const observer = new MutationObserver(schedule);
+  function watchList() {
+    const row = document.querySelector(PiClockReaders.ROW_SELECTOR);
+    const list = row ? (row.closest('[role="listbox"], [role="list"], [role="grid"], [role="region"]') || row.parentElement) : null;
+    if (list && list !== watched) {
+      observer.disconnect();
+      observer.observe(list, { childList: true, subtree: true });
+      watched = list;
+    }
+  }
+  setInterval(() => { watchList(); tick(false); }, 15 * 1000);
+  setTimeout(() => { watchList(); tick(true); }, 3000);
 
   // The popup asks for a fresh read, or for a sample of the page to send to whoever maintains the reader.
   chrome.runtime.onMessage.addListener((msg, sender, respond) => {
