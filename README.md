@@ -36,7 +36,7 @@ If `raspberrypi.local` doesn't work, use the Pi's IP address instead (find it in
 
 ## 3. Add your weather, calendar and email
 
-**On the touchscreen:** tap the small arrow in the bottom-right corner of the clock, then **Settings**. Tap any value to change it; an on-screen keyboard appears for text. To add a mailbox, tap **Add a mailbox**, pick your provider, type the username and app password, and tap **Check sign-in** to try it before saving. **Save and apply** restarts the clock service and shows whether weather, mail and calendar are working. The screen goes back to the clock by itself after a few minutes without taps.
+**On the touchscreen:** tap the small arrow in the bottom-right corner of the clock, then **Settings**. Tap any value to change it; an on-screen keyboard appears for text. Drag the list up or down with one finger to scroll. To add a mailbox, tap **Add a mailbox**, pick your provider, type the username and app password, and tap **Check sign-in** to try it before saving. **Save and apply** restarts the clock service and shows whether weather, mail and calendar are working. The screen goes back to the clock by itself after a few minutes without taps.
 
 **From your PC instead:** open the settings file over SSH:
 
@@ -187,6 +187,8 @@ piclock = /bin/bash /home/pi/piclock/kiosk.sh
 **Want to view it from another computer?** Set `host = 0.0.0.0` in `[server]`, restart, and open `http://raspberrypi.local:8080`. Anyone on your network could then see your mail subjects and calendar. Settings and the hide button still work only on the Pi's own screen.
 
 **The light stays yellow or blue after you closed Claude Code:** a session that ends without saying so drops off by itself (a finished one after 6 hours, a working one after 2). If the light never changes at all, look at `%LOCALAPPDATA%\PiClock\hook.log` on the PC: each line says whether the Pi answered.
+
+**The Settings page doesn't scroll:** drag the list with one finger, anywhere on it. Raspberry Pi OS makes the touchscreen act as a mouse, so a drag doesn't scroll on its own; the Settings page handles it itself since 22 October 2026. If it still doesn't move, the Pi hasn't installed that update yet: `piclock status` shows the version.
 
 **Settings says it can't reach the clock service:** run `piclock status` from your PC. After **Save and apply** the service restarts; give it a few seconds.
 

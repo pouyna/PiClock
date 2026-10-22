@@ -66,7 +66,7 @@ Changes to `install.sh` are not applied automatically: the updater only prints a
 11. Secrets never leave the Pi through the API: `/api/settings` reports only whether a password is set and labels a calendar link by host and position (for iCloud the path *is* the secret), and error text never contains one. Settings, the mailbox check and the hide button answer only to the loopback address and only to JSON bodies. The mailbox check reuses a stored password only for the same server and username it was saved for. IMAP always verifies the server certificate (`ssl.create_default_context()`).
 12. The hook on the PC must never interfere with Claude Code: no stdout, exit 0 always, a deadline on everything (stdin read and ssh). Keep it stdlib-only so `py -I` runs it anywhere.
 13. The Claude light is the one place with colours outside the palette, because the owner asked for green/blue/yellow/red. Don't let them spread.
-14. Touch targets are at least 4.6 `--u` tall, every tap effect reverts by itself, and the hide action needs two taps (corner button, then Hide) so a wipe of the screen can't close the clock.
+14. Touch targets are at least 4.6 `--u` tall, every tap effect reverts by itself, and the hide action needs two taps (corner button, then Hide) so a wipe of the screen can't close the clock. Raspberry Pi OS makes labwc turn touches into mouse events (`mouseEmulation="yes"` on the `<touch>` line in `~/.config/labwc/rc.xml`), so a finger drag reaches Chromium as a mouse drag and scrolls nothing by itself: anything that has to scroll by finger uses `dragScroll()` in settings.html, which steps aside for real touch events.
 15. Anything the service starts on the screen must not live in the service's cgroup, or the next `systemctl restart piclock` (every update) kills it: `cmd_show` starts the kiosk with `systemd-run --user`, falling back to `nohup`. The hidden state is kept in `.screen-hidden` so a restart doesn't lose the return timer.
 16. Settings validation is the last line between the screen and a service that can't start: whole-number fields reject fractions and `nan`, section headers are matched the way configparser reads them, and every rewrite of config.ini is parsed before it replaces the file. The server reads whole-number settings through `cfg_int()`, which falls back to the default instead of raising.
 
@@ -79,7 +79,7 @@ py -m venv .venv
 .venv\Scripts\playwright install chromium
 ```
 
-- `pytest dev`: 65 tests. `test_backend.py` covers config parsing, calendar, mail, weather and the API; `test_features.py` the Claude sessions and light, the hide endpoint, weather 5xx wording and the retry delay; `test_settings.py` the vault, `describe()`, `apply()` (comments kept, mailboxes added, renamed, removed, encrypted), `encrypt_in_place()` and the settings API; `test_hook.py` the PC hook's event mapping and heartbeat rate limit.
+- `pytest dev`: 67 tests. `test_backend.py` covers config parsing, calendar, mail, weather and the API; `test_features.py` the Claude sessions and light, the hide endpoint, weather 5xx wording and the retry delay; `test_settings.py` the vault, `describe()`, `apply()` (comments kept, mailboxes added, renamed, removed, encrypted), `encrypt_in_place()` and the settings API; `test_hook.py` the PC hook's event mapping and heartbeat rate limit; `test_pages.py` opens the Settings page in Playwright's Chromium and checks that a mouse-style drag scrolls it without pressing anything (skipped when Playwright's browser is missing).
 - `python dev/screenshot.py`: renders the real pages with sample data at 800×480, 1024×600, 1920×1080 and 720×1280 portrait, plus the new-mail alert, the tap states (mail, agenda, hide sheet, light sheet), no light, 24-hour mode, not-set-up and error states, and the Settings page with its keyboard, into `dev/screenshots/` (gitignored). Open and look at them after every change to the pages; text clipping and overflow at 800×480 is the usual failure.
 - `python dev/mock_server.py` (`--24h`, `--empty`, `--errors`, `--no-claude`, `--light red`): live preview at http://127.0.0.1:8099, with `/settings` served from `config.example.ini`. Visit `/new-mail` to trigger an alert.
 - `dev/test_update.sh`: fake GitHub plus fake Pi covering good update, broken update and rollback, no retry, a fix with a package change, config safety, and auto-updates off. 18 checks; about a minute. It needs Linux root. This PC has no WSL distro, so run it in Docker: start Docker Desktop, wait for it, then run this from PowerShell (it passed on 2026-10-21 in a Debian 13 container, the Pi's OS family):
@@ -117,6 +117,8 @@ The look: a night-sky screen readable from across a room, calm enough for a bedr
 - `imaplib.IMAP4_SSL` without `ssl_context` does not verify certificates. Always pass `ssl.create_default_context()`.
 - The adversarial review of 2026-10-21 (five reviewers, two refuters per finding) ran into the owner's Claude usage limit; keep fan-outs small, as the memory file already said.
 - The Bash tool on this PC truncates commands longer than about 8k characters; long edit scripts go in a file first.
+- labwc's touch mouse emulation (the Pi OS default for touchscreens) hands touches to Chromium as mouse events, pointerType `mouse`: taps work as clicks, but a finger drag scrolls nothing. Settings scrolls by hand (`dragScroll()`), following the pointer on the document: pointer capture on the list sent the click that ends a plain tap to the list instead of the button, so taps stopped working.
+- Chromium overwrites its own environment block with its process title, so `/proc/<pid>/environ` holds no variables. `systemctl --user show-environment` on the Pi shows what the kiosk inherits (`DISPLAY`, `WAYLAND_DISPLAY`, `XDG_SESSION_TYPE=wayland`).
 
 ## What has been checked on the real Pi
 
@@ -130,10 +132,11 @@ Seen over SSH on 2026-10-21, before the first install:
 Confirmed after the first install (2026-10-21, a six-lens read-only check over SSH plus a screenshot of the real screen with `grim`): the kiosk opens at login, the service runs as `pi`, the updater timer fired as root and exited 0, the Pi reads the public repo, config.ini is 0600, port 8080 is loopback-only, the screen stays lit, and Open-Meteo answered 503 for a while right after boot (hence the quick retry and the kinder message).
 Also seen, for the owner to decide: wayvnc listens on port 5900 with the pi account's well-known default password, rpcbind on 111; the default audio sink sits at 40%, so the chime will be faint (`ssh pi@raspberrypi.local 'XDG_RUNTIME_DIR=/run/user/1000 wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.8'` raises it without sudo). A screenshot of the real screen: `ssh pi@raspberrypi.local 'WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000 grim /tmp/s.png'` then scp it.
 
+Seen on 2026-10-22: `~/.config/labwc/rc.xml` holds `<touch deviceName="TSTP MTouch (USB 1-1.4)" mapToOutput="HDMI-A-1" mouseEmulation="yes"/>`, written by Pi OS for this screen. The owner opened Settings by touch (taps work) but couldn't scroll; `dragScroll()` fixed it the same day. The kiosk Chromium (155) inherits both `WAYLAND_DISPLAY` and `DISPLAY` from the user manager and runs with no `--ozone-platform` flag. `piclock show` from the service's return timer works (confirmed 2026-10-22 by the hide-and-return round trip).
+
 Still to confirm:
 
-- `piclock show` from an SSH session and from the hide button's return timer (the service has no display environment of its own; `cmd_show` sets `XDG_RUNTIME_DIR` and `WAYLAND_DISPLAY`).
-- The on-screen keyboard and the whole Settings flow on the real touchscreen, and whether the Pi's own keyboard (squeekboard) also pops up over it.
+- Finger scrolling on Settings after the 2026-10-22 fix, the on-screen keyboard and the rest of the Settings flow on the real touchscreen, and whether the Pi's own keyboard (squeekboard) also pops up over it.
 - `raspi-config nonint do_blanking 1` on this OS version.
 - The chime playing through the chosen output.
 - Real Gmail/iCloud IMAP sign-in, and real Google/iCloud/Outlook .ics feeds.
@@ -144,3 +147,4 @@ Still to confirm:
 - Backlight dimming: this HDMI touchscreen (TSTP MTouch, 1280×800) exposes no `/sys/class/backlight` and no DDC, so the overlay stays.
 - A hidden clock could minimise instead of closing Chromium if `wlrctl` were installed (a system package; ask first).
 - Severe weather alerts; a second time zone; OAuth for Outlook.com; hourly forecast on a tap of the weather panel.
+- Real touch instead of mouse emulation: `mouseEmulation="no"` on the `<touch>` line in `~/.config/labwc/rc.xml`, then a reboot, gives Chromium real touch events (native scrolling with a glide everywhere, multi-touch). Pi OS sets `yes` so that apps which only understand a mouse still react to the screen, and its screen-configuration tool writes `yes` again. The owner's call; `dragScroll()` steps aside when real touch arrives.

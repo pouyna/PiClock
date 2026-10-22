@@ -433,9 +433,54 @@ document.addEventListener("keydown", (e) => {
   e.preventDefault();
 });
 
+/* ---------- finger scrolling ----------
+   Raspberry Pi OS tells the desktop (labwc, "mouseEmulation" in ~/.config/labwc/rc.xml) to turn
+   touches into mouse events, so a finger drag reaches this page as a mouse drag, which scrolls
+   nothing on its own. This scrolls the list by hand and lets it glide a little at the end. Real
+   touch events are left to the browser, which scrolls them itself. */
+let dragEndedAt = -1e9;
+function dragScroll(el) {
+  let id = null, lastY = 0, lastT = 0, moved = 0, speed = 0, glide = 0;
+  el.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "touch" || e.button !== 0) return;
+    cancelAnimationFrame(glide);
+    id = e.pointerId; lastY = e.clientY; lastT = e.timeStamp; moved = 0; speed = 0;
+  });
+  // Followed on the document rather than captured on the element: a captured pointer would send
+  // the click that ends a plain tap to this element instead of the button under the finger.
+  document.addEventListener("pointermove", (e) => {
+    if (e.pointerId !== id) return;
+    if (!(e.buttons & 1)) { id = null; return; }   // the release happened off screen
+    const dy = e.clientY - lastY, dt = Math.max(e.timeStamp - lastT, 1);
+    lastY = e.clientY; lastT = e.timeStamp; moved += Math.abs(dy);
+    el.scrollTop -= dy;
+    speed = 0.7 * speed + 0.3 * (dy / dt);   // pixels per millisecond, smoothed
+  });
+  const end = (e) => {
+    if (e.pointerId !== id) return;
+    id = null;
+    if (moved < 8) return;                   // a tap, not a drag
+    dragEndedAt = e.timeStamp;               // the click that follows a drag must not press anything
+    let v = speed * 16;                      // pixels per frame
+    const step = () => {
+      const was = el.scrollTop;
+      el.scrollTop -= v; v *= 0.94;
+      if (Math.abs(v) >= 0.4 && el.scrollTop !== was) glide = requestAnimationFrame(step);
+    };
+    glide = requestAnimationFrame(step);
+  };
+  document.addEventListener("pointerup", end);
+  document.addEventListener("pointercancel", end);
+}
+dragScroll($("#main"));
+dragScroll($("#box"));
+document.addEventListener("click", (e) => { if (e.timeStamp - dragEndedAt < 500) { e.stopPropagation(); e.preventDefault(); } }, true);
+document.addEventListener("dragstart", (e) => e.preventDefault());
+
 /* ---------- housekeeping ---------- */
 function resetIdle() { clearTimeout(idleTimer); idleTimer = setTimeout(() => { location.href = "/"; }, 4 * 60 * 1000); }   // back to the clock when forgotten
 document.addEventListener("click", resetIdle, true);
+document.addEventListener("pointerdown", resetIdle, true);
 document.addEventListener("keydown", resetIdle, true);
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 resetIdle();
