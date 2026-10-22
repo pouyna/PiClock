@@ -70,9 +70,12 @@ def sample_mail():
                         "subject": "Call me when you get a minute", "ts": t - 30})
     personal = 5 + STATE["extra_mail"]
     # The server sends more than the screen shows; a tap on the mail panel shows the rest.
-    return {"total": personal + 2, "messages": msgs[:12], "show": 4,
+    # A mailbox read by the PC's browser extension: its time is the page's own text, and a note says when the PC last reported.
+    msgs.insert(2, {"id": "uic.edu:AAQk1", "mailbox": "uic.edu", "from": "Registrar", "subject": "Spring registration opens Monday", "ts": None, "when": "Yesterday"})
+    return {"total": personal + 2 + 1, "messages": msgs[:12], "show": 4,
             "boxes": [{"name": "Personal", "unread": personal, "error": None},
-                      {"name": "Work", "unread": 2, "error": None}]}
+                      {"name": "Work", "unread": 2, "error": None},
+                      {"name": "uic.edu", "unread": 1, "error": None, "note": "Last update from the PC 2 h ago."}]}
 
 
 def sample_claude():

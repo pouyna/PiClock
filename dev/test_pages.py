@@ -87,3 +87,48 @@ def test_settings_leaves_real_touch_to_the_browser(preview, browser):
     }""")
     assert moved == 0
     page.close()
+
+
+# ---------- the browser extension's readers, against saved shapes of the webmail pages ----------
+MOCK = HERE / "mock_mail"
+READERS_JS = HERE.parent / "pc" / "extension" / "readers.js"
+
+
+def read_mock(browser, html_name, expression):
+    page = browser.new_page()
+    page.set_content((MOCK / html_name).read_text(encoding="utf-8"))
+    page.add_script_tag(path=str(READERS_JS))
+    result = page.evaluate(expression)
+    page.close()
+    return result
+
+
+def test_outlook_reader_takes_the_unread_rows(browser):
+    r = read_mock(browser, "outlook.html", "PiClockReaders.pick('outlook.office.com').read(document, {hostname: 'outlook.office.com', hash: ''})")
+    assert r["provider"] == "Outlook" and r["account"] == "outlook.office.com" and r["unread"] == 2
+    assert [m["id"] for m in r["messages"]] == ["AAQkADc1", "AAQkADc3"]     # unread by label, unread by bold; the read one skipped
+    first = r["messages"][0]
+    assert first["from"] == "Priya Raman" and first["subject"] == "Re: Saturday hike, still on?"
+    assert first["when"] == "9:12 AM" and isinstance(first["ts"], int)       # the tooltip's full date
+    assert r["messages"][1]["when"] == "Mon 10/19"
+
+
+def test_gmail_reader_uses_the_title_count_and_thread_ids(browser):
+    r = read_mock(browser, "gmail.html", "PiClockReaders.pick('mail.google.com').read(document, {hostname: 'mail.google.com', hash: '#inbox'})")
+    assert r["provider"] == "Gmail" and r["account"] == "pouyan@gmail.com" and r["unread"] == 2
+    assert [(m["id"], m["from"], m["subject"]) for m in r["messages"]] == [("18f1", "Mom", "Call me when you get a minute"), ("18ef", "Ravi", "Photos from the lake")]
+    assert isinstance(r["messages"][0]["ts"], int)
+    other = read_mock(browser, "gmail.html", "PiClockReaders.pick('mail.google.com').read(document, {hostname: 'mail.google.com', hash: '#label/Receipts'})")
+    assert other is None                                                      # another label isn't the inbox
+
+
+def test_generic_reader_and_sign_in_pages(browser):
+    page = browser.new_page()
+    page.set_content("<title>(7) Inbox - Proton Mail</title><p>hello</p>")
+    page.add_script_tag(path=str(READERS_JS))
+    r = page.evaluate("PiClockReaders.pick('mail.proton.me').read(document, {hostname: 'mail.proton.me', hash: ''})")
+    assert r == {"provider": "proton.me", "account": "mail.proton.me", "unread": 7, "messages": []}
+    assert page.evaluate("PiClockReaders.pick('outlook.live.com').name") == "Outlook"
+    assert page.evaluate("PiClockReaders.pick('login.microsoftonline.com').read(document, {hostname: 'login.microsoftonline.com', hash: ''})") == {"provider": "Outlook", "needs_login": True}
+    assert page.evaluate("PiClockReaders.pick('outlook.office.com').read(document, {hostname: 'outlook.office.com', hash: ''})") is None   # no list on this page
+    page.close()

@@ -65,7 +65,7 @@ PROVIDERS = [
     {"name": "Yahoo", "host": "imap.mail.yahoo.com", "port": 993, "hint": "Account Info, Account Security, Generate app password."},
     {"name": "Fastmail", "host": "imap.fastmail.com", "port": 993, "hint": "Settings, Privacy & Security, App passwords."},
     {"name": "Outlook", "host": "outlook.office365.com", "port": 993,
-     "hint": "Microsoft has been switching off password sign-in for mail apps, so this may not work."},
+     "hint": "Microsoft mail (Outlook, Hotmail, work and school accounts) no longer accepts password sign-in. Use the browser extension on the PC instead: README, Mail from the browser."},
     {"name": "Other", "host": "", "port": 993, "hint": "Your provider's IMAP server name, with an app password if it offers them."},
 ]
 TIME_RE = re.compile(r"^(\d{1,2}):(\d{2})$")

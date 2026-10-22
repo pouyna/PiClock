@@ -634,10 +634,10 @@ function renderMail() {
   const shown = mailMore ? d.messages : d.messages.slice(0, d.show || 4);
   const list = shown.map((x) => `
     <li class="${(freshUntil.get(x.id) || 0) > now ? "fresh" : ""}">
-      <span class="m-from">${esc(x.from)}</span><span class="m-time">${esc(ago(x.ts))}</span>
+      <span class="m-from">${esc(x.from)}</span><span class="m-time">${esc(x.when || ago(x.ts))}</span>
       <span class="m-subj">${esc(x.subject)}</span>
     </li>`).join("");
-  const errors = d.boxes.filter((b) => b.error).map((b) => `<p class="note">${esc(b.name)}: ${esc(b.error)}</p>`).join("");
+  const errors = d.boxes.filter((b) => b.error || b.note).map((b) => `<p class="note">${esc(b.name)}: ${esc(b.error || b.note)}</p>`).join("");
   el.innerHTML = head + errors + (list ? `<ul class="mail-list">${list}</ul>` : "");
 }
 

@@ -98,7 +98,10 @@ if not m["enabled"]:
     line("Mail", "not set up")
 elif m["data"]:
     for b in m["data"]["boxes"]:
-        line("Mail", f"{b['name']}: " + (b["error"] or f"{b['unread']} unread"))
+        text = b["error"] or (f"{b['unread']} unread" if b["unread"] is not None else "no recent count")
+        if b.get("note"):
+            text += f" ({b['note'].rstrip('.')})"
+        line("Mail", f"{b['name']}: {text}")
     print(f"{'':<10}checked {age(m['updated'])}")
 else:
     line("Mail", f"failed: {m['error']}" if m["error"] else "checking")
@@ -293,6 +296,7 @@ case "${1:-}" in
   show)    cmd_show ;;
   hide)    cmd_hide ;;
   claude)  "$PY" "$APP_DIR/claude_status.py" ;;   # the PC reports a Claude Code session's state on stdin
+  mail)    "$PY" "$APP_DIR/browser_mail.py" ;;    # the PC's browser extension reports a mailbox on stdin
   *)
     cat <<'USAGE'
 Usage: piclock <command>
@@ -305,6 +309,7 @@ Usage: piclock <command>
   show      Open the clock on the Pi's screen
   hide      Close the clock on the Pi's screen
   claude    Record a Claude Code session's state (used by the PC over SSH, see README.md)
+  mail      Record a mailbox read by the PC's browser extension (used over SSH, see README.md)
 USAGE
     [[ -n "${1:-}" ]] && exit 1
     ;;

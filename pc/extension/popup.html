@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PiClock mail</title>
+<style>
+  :root { --night: #172031; --dusk: #222E44; --bone: #EEE7D7; --mist: #A5ADBB; --haze: #67728A; --sodium: #F2B45C; }
+  body { width: 360px; margin: 0; padding: 14px 16px 16px; background: var(--night); color: var(--bone); font: 14px/1.4 system-ui, "Segoe UI", sans-serif; }
+  h1 { margin: 0 0 4px; font-size: 18px; font-weight: 700; }
+  .quiet { color: var(--mist); margin: 0 0 10px; }
+  .box { background: var(--dusk); border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
+  .box .name { font-weight: 700; }
+  .box .line { color: var(--mist); font-size: 13px; }
+  .box .bad { color: #E0564F; }
+  .box .ok { color: #5FBF8A; }
+  .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--haze); border-radius: 6px; background: var(--night); color: var(--bone); font: inherit; }
+  button { padding: 6px 10px; border: 0; border-radius: 6px; background: var(--bone); color: var(--night); font: inherit; font-weight: 600; cursor: pointer; }
+  button.plain { background: none; color: var(--mist); text-decoration: underline; padding: 6px 2px; font-weight: 400; }
+  #helper { margin: 10px 0 0; font-size: 13px; color: var(--mist); }
+  #site { margin-top: 10px; }
+  #msg { margin-top: 8px; font-size: 13px; color: var(--sodium); min-height: 1.2em; }
+</style>
+</head>
+<body>
+<h1>PiClock mail</h1>
+<p class="quiet">Unread mail from your open webmail tabs, shown on the clock.</p>
+<div id="boxes"></div>
+<div id="site"></div>
+<p id="helper"></p>
+<p id="msg"></p>
+<script src="popup.js"></script>
+</body>
+</html>

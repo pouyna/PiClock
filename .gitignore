@@ -1,11 +1,12 @@
 # Your settings and passwords stay on the Pi and never go to GitHub
 config.ini
 
-# Created on the Pi by install.sh, the updater, and the Claude status reports
+# Created on the Pi by install.sh, the updater, and the reports from the PC
 .venv/
 .update-skip
 .screen-hidden
 claude/
+mail/
 __pycache__/
 *.pyc
 

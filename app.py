@@ -11,6 +11,7 @@ import email
 import imaplib
 import logging
 import os
+import re
 import ssl
 import subprocess
 import sys
@@ -26,6 +27,7 @@ import recurring_ical_events
 import requests
 from flask import Flask, jsonify, request, send_from_directory
 
+import browser_mail
 import claude_status
 import settings
 import vault
@@ -33,6 +35,7 @@ import vault
 BASE = Path(__file__).resolve().parent
 CONFIG_PATH = Path(os.environ.get("PICLOCK_CONFIG", BASE / "config.ini"))  # tests point this elsewhere
 CLAUDE_DIR = Path(os.environ.get("PICLOCK_CLAUDE_DIR", BASE / "claude"))   # session reports from the PC
+BROWSER_MAIL_DIR = Path(os.environ.get("PICLOCK_MAIL_DIR", BASE / "mail"))   # mailboxes read by the PC's browser extension
 BOOT_ID = str(int(time.time()))  # the page reloads itself when this changes
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -73,6 +76,20 @@ def cfg_int(section, key, default):
 
 def clean(text):
     return " ".join(str(text or "").split())
+
+
+def age_text(seconds):
+    """'3 min', '2 h', '1 day': how long ago, in the clock's plain words."""
+    m = int(seconds // 60)
+    if m < 2:
+        return "a minute"
+    if m < 60:
+        return f"{m} min"
+    h = m // 60
+    if h < 24:
+        return f"{h} h"
+    d = h // 24
+    return "a day" if d == 1 else f"{d} days"
 
 
 def retry_delay(interval, failures):
@@ -195,6 +212,9 @@ def fetch_weather():
 # --------------------------------------------------------------------------- #
 # Email (IMAP, read-only)
 # --------------------------------------------------------------------------- #
+MICROSOFT_HOST = re.compile(r"(^|\.)(office365|outlook|live|hotmail)\.com$", re.I)
+
+
 class MailError(Exception):
     pass
 
@@ -241,6 +261,8 @@ def check_mailbox(label, sec, show_latest):
         try:
             imap.login(sec["username"].strip(), password)
         except imaplib.IMAP4.error:
+            if MICROSOFT_HOST.search(host):
+                raise MailError("Microsoft mail no longer accepts password sign-in. Use the browser extension on the PC instead (README, Mail from the browser).")
             raise MailError("Sign-in failed. Check the username and app password in Settings.")
 
         typ, _ = imap.select(quote_folder(folder), readonly=True)  # readonly: never marks mail as read
@@ -399,6 +421,42 @@ def fetch_calendar():
 # --------------------------------------------------------------------------- #
 # Claude sessions (reported by the PC through `piclock claude`) and the screen
 # --------------------------------------------------------------------------- #
+def mail_snapshot():
+    """The mailboxes the clock checks itself (IMAP) plus the ones the PC's browser extension reports, as one panel."""
+    base = snapshot("mail")
+    now = time.time()
+    extra = browser_mail.mailboxes(BROWSER_MAIL_DIR, now)
+    if not extra:
+        return base
+    show_latest = max(1, cfg_int("email", "show_latest", 4))
+    data = base.get("data") if base.get("enabled") else None
+    boxes = list(data["boxes"]) if data else []
+    messages = list(data["messages"]) if data else []
+    total = data["total"] if data else 0
+    if base.get("enabled") and not data and base.get("error"):
+        boxes.append({"name": "Mail", "unread": None, "error": base["error"]})
+    for b in extra:
+        note = None
+        if b["needs_login"]:
+            note = f"{b['provider']} is asking for a sign-in on the PC."
+        elif now - b["updated"] > browser_mail.STALE_SECONDS:
+            note = f"Last update from the PC {age_text(now - b['updated'])} ago."
+        if b["unread"] is None:   # nothing read for a day: the mail is probably read by now
+            boxes.append({"name": b["label"], "unread": None, "error": None, "note": note or "No update from the PC for a day."})
+            continue
+        boxes.append({"name": b["label"], "unread": b["unread"], "error": None, "note": note})
+        total += b["unread"]
+        for i, m in enumerate(b["messages"]):
+            messages.append({"id": f"{b['label']}:{m['id']}", "mailbox": b["label"], "from": m["from"], "subject": m["subject"],
+                             "ts": m["ts"], "when": m.get("when") or "", "_order": b["read_at"] - i})
+    messages.sort(key=lambda m: m["ts"] or m.get("_order") or 0, reverse=True)
+    keep = max(12, show_latest * 3)
+    for m in messages:
+        m.pop("_order", None)
+    return {"enabled": True, "data": {"total": total, "boxes": boxes, "messages": messages[:keep], "show": show_latest},
+            "error": None, "updated": max([base.get("updated") or 0] + [b["updated"] for b in extra])}
+
+
 def claude_snapshot():
     if not cfg.getboolean("claude", "show", fallback=True):
         return {"enabled": False}
@@ -534,7 +592,7 @@ def all_data():
         "boot_id": BOOT_ID,
         "config": display_settings(),
         "weather": snapshot("weather"),
-        "mail": snapshot("mail"),
+        "mail": mail_snapshot(),
         "calendar": snapshot("calendar"),
         "claude": claude_snapshot(),
         "screen": {"hidden_until": SCREEN["hidden_until"]},

@@ -88,6 +88,20 @@ Uncomment the `[email:Personal]` example (remove the `#` at the start of each li
 
 Passwords and calendar links are encrypted before they are stored in `config.ini`, where they appear as `enc:...`. Anything you type into the file by hand is encrypted the next time the clock starts. The key lives in `~/.config/piclock/secret.key` on the Pi, readable only by the `pi` user. This keeps the secrets out of casual view and out of copies of the file. Someone with full access to the Pi or its SD card could still read both the file and the key, so keep using app passwords, which you can revoke at any time. If the key file is ever lost, the clock says so and you enter the passwords again in Settings.
 
+### Microsoft mail: the browser extension
+
+Microsoft mail (Outlook.com, Hotmail, and work or school accounts such as UIC) no longer accepts a password from a mail app, so the clock can't sign in to it. Instead, a small Chrome extension on your PC reads the Outlook tab you already have open and sends the unread list to the Pi over the same SSH link the Claude light uses. Nothing goes to the internet, nothing signs in anywhere, and the Pi opens no new port. It reads other webmail too (Gmail, Yahoo, iCloud, and any other site through the unread count in its tab title), but for those the app password route above runs without the PC and is the better choice.
+
+One-time setup, from PowerShell in the project folder:
+
+```
+py pc\setup_extension.py
+```
+
+It registers the helper (`pc\mail_host.py`) with Chrome and Edge for your user, checks that the helper answers and that the Pi can be reached, and prints the extension's ID. Then in Chrome: open `chrome://extensions`, turn on **Developer mode** (top right), click **Load unpacked**, and choose `C:\Users\Pouyan\Desktop\PiClock\pc\extension`. Open Outlook in a tab, sign in as usual (Duo included), and keep the tab open, pinned if you like. The clock shows the mailbox within a minute, named after the account's domain (uic.edu). Click the extension's icon to give it another name, to read the tab again, or to forget a mailbox.
+
+What to expect: new mail reaches the clock within a minute or two while the tab is open and the PC is awake. When the PC is asleep or the tab is closed, the clock keeps the last list and says how old it is; after a day it drops the list and keeps the note; after three quiet days the mailbox disappears until the tab reports again. When Outlook asks you to sign in again, the clock says so. The reader depends on how Outlook's page is built. If it ever reads nothing, click the icon, then **Copy a sample for troubleshooting**, and paste it to Claude Code; the sample contains the first row of your mail list and nothing else.
+
 ## Changing the clock
 
 Make changes on GitHub and the Pi picks them up by itself within 10 minutes. To edit a file, open it on github.com, click the pencil icon, make your change, and click **Commit changes**. Or ask Claude Code to make the change and push it (see below). The screen reloads on its own after each update.
@@ -164,7 +178,9 @@ To set it up on another PC: give that PC an SSH key for the Pi (see "Working wit
 
 **Start with** `piclock status`. It names the part that isn't working and why. For more detail, use `piclock logs`.
 
-**Mail says sign-in failed:** double-check the username and app password. For Gmail, make sure it's an app password, not your Google password.
+**Mail says sign-in failed:** double-check the username and app password. For Gmail, make sure it's an app password, not your Google password. For a Microsoft account, use the browser extension (section 3) instead; no password works there any more.
+
+**The extension says the mail wasn't sent, or no helper:** run `py pc\setup_extension.py` again; it reports whether the helper answers and whether the Pi can be reached. The helper's log is `%LOCALAPPDATA%\PiClock\mail_host.log`.
 
 **An update didn't arrive:** run `ssh -t pi@raspberrypi.local piclock update` to see what happens. It will say if GitHub can't be reached or if the new version failed to start.
 
