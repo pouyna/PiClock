@@ -151,12 +151,12 @@ def settings_check():
     return jsonify({"ok": True, "unread": 3})
 
 
-PREFS = {"mail_filter": []}
+PREFS = {"mail_hidden": []}
 
 
 @app.post("/api/prefs")
 def prefs():
-    PREFS["mail_filter"] = list((request.get_json(silent=True) or {}).get("mail_filter") or [])
+    PREFS["mail_hidden"] = list((request.get_json(silent=True) or {}).get("mail_hidden") or [])
     return jsonify({"ok": True, "prefs": PREFS})
 
 

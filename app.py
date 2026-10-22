@@ -632,18 +632,19 @@ def write_prefs(data):
 
 @app.post("/api/prefs")
 def prefs():
-    """Choices made by touch on the clock: which mailboxes the mail panel shows (an empty list means all)."""
+    """Choices made by touch on the clock: which mailboxes the mail panel hides (a new mailbox always shows)."""
     if not local_only():
         return jsonify({"error": "Only the Pi's own screen can change this."}), 403
     body = request.get_json(silent=True)
     if not isinstance(body, dict):
         return jsonify({"error": "Expected JSON."}), 400
-    names = body.get("mail_filter")
+    names = body.get("mail_hidden")
     if not isinstance(names, list) or len(names) > 20 or not all(isinstance(n, str) and 0 < len(n) <= 60 for n in names):
-        return jsonify({"error": "mail_filter must be a list of mailbox names"}), 400
+        return jsonify({"error": "mail_hidden must be a list of mailbox names"}), 400
     with PREFS_LOCK:
         data = read_prefs()
-        data["mail_filter"] = sorted(set(names))
+        data.pop("mail_filter", None)   # the earlier form of this choice
+        data["mail_hidden"] = sorted(set(names))
         write_prefs(data)
     return jsonify({"ok": True, "prefs": data})
 

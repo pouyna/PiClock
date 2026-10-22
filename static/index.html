@@ -224,8 +224,7 @@
     font: inherit; font-size: calc(var(--u) * 1.7); line-height: 1; color: var(--mist); background: var(--dusk); border: 0; cursor: none;
     border-radius: calc(var(--u) * 2.3); padding: 0 calc(var(--u) * 1.1); min-height: calc(var(--u) * 4.6);
   }
-  .mail-boxes button.on { background: var(--bone); color: var(--night); }
-  .mail-boxes button.off { color: var(--haze); }
+  .mail-boxes button.off { opacity: 0.4; }   /* a hidden mailbox; tap to bring it back */
   .mail-list { list-style: none; margin: calc(var(--u) * 1) 0 0; padding: 0; }
   .mail-list li {
     display: grid;
@@ -624,29 +623,30 @@ function renderAgenda() {
   el.innerHTML = errors + html;
 }
 
-// Which mailboxes the panel shows: the names chosen by touch (kept on the Pi), or all of them.
+// Which mailboxes the panel shows: all of them, minus the ones hidden by touch (kept on the Pi).
 function mailSelection(d) {
   const okBoxes = d.boxes.filter((b) => !b.error);
-  const wanted = new Set(DATA?.prefs?.mail_filter || []);
-  const active = okBoxes.filter((b) => wanted.has(b.name));
-  const chosen = active.length ? new Set(active.map((b) => b.name)) : null;
+  const hidden = new Set(DATA?.prefs?.mail_hidden || []);
+  let shown = okBoxes.filter((b) => !hidden.has(b.name));
+  if (!shown.length) shown = okBoxes;   // never an empty panel
+  const chosen = shown.length < okBoxes.length ? new Set(shown.map((b) => b.name)) : null;
   return {
     okBoxes, chosen,
     visible: chosen ? d.messages.filter((x) => chosen.has(x.mailbox)) : d.messages,
-    total: chosen ? active.reduce((n, b) => n + (b.unread || 0), 0) : d.total,
+    total: chosen ? shown.reduce((n, b) => n + (b.unread || 0), 0) : d.total,
   };
 }
 function toggleMailbox(name) {
   const d = DATA?.mail?.data;
   if (!d) return;
   const names = d.boxes.filter((b) => !b.error).map((b) => b.name);
-  let sel = (DATA.prefs?.mail_filter || []).filter((n) => names.includes(n));
-  if (!name) sel = [];
-  else if (sel.includes(name)) sel = sel.filter((n) => n !== name);
-  else sel = [...sel, name];
-  DATA.prefs = { ...(DATA.prefs || {}), mail_filter: sel };
+  let hidden = (DATA.prefs?.mail_hidden || []).filter((n) => names.includes(n));
+  if (hidden.includes(name)) hidden = hidden.filter((n) => n !== name);
+  else if (hidden.length + 1 < names.length) hidden = [...hidden, name];   // the last lit mailbox stays
+  else return;
+  DATA.prefs = { ...(DATA.prefs || {}), mail_hidden: hidden };
   renderMail();
-  fetch("/api/prefs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mail_filter: sel }) }).catch(() => {});
+  fetch("/api/prefs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mail_hidden: hidden }) }).catch(() => {});
 }
 
 function renderMail() {
@@ -658,9 +658,8 @@ function renderMail() {
 
   const now = Date.now();
   const sel = mailSelection(d);
-  const chip = (b) => `<button class="${sel.chosen ? (sel.chosen.has(b.name) ? "on" : "off") : ""}" data-box="${esc(b.name)}">${esc(b.name)} ${b.unread ?? ""}</button>`;
-  const boxes = d.boxes.length > 1 && sel.okBoxes.length
-    ? `<span class="mail-boxes">${sel.chosen ? `<button class="all" data-box="">All</button>` : ""}${sel.okBoxes.map(chip).join("")}</span>` : "";
+  const chip = (b) => `<button class="${sel.chosen && !sel.chosen.has(b.name) ? "off" : ""}" data-box="${esc(b.name)}" aria-pressed="${!(sel.chosen && !sel.chosen.has(b.name))}">${esc(b.name)} ${b.unread ?? ""}</button>`;
+  const boxes = d.boxes.length > 1 && sel.okBoxes.length ? `<span class="mail-boxes">${sel.okBoxes.map(chip).join("")}</span>` : "";
   const head = sel.total
     ? `<div class="mail-head"><span class="mail-count">${sel.total}</span><span class="mail-word">unread</span>${boxes}</div>`
     : `<div class="mail-head"><span class="mail-count zero">No unread mail</span>${boxes}</div>`;
