@@ -115,17 +115,16 @@ def test_api_all_carries_claude_sessions_and_screen_state(app_module, tmp_path, 
 def test_prefs_remember_the_mailbox_choice(app_module, tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "PREFS_FILE", tmp_path / "prefs.json")
     client = app_module.app.test_client()
-    assert client.post("/api/prefs", json={"mail_hidden": ["Work"]}, environ_base={"REMOTE_ADDR": "192.168.1.20"}).status_code == 403
+    assert client.post("/api/prefs", json={"mail_view": "Work"}, environ_base={"REMOTE_ADDR": "192.168.1.20"}).status_code == 403
     local = {"REMOTE_ADDR": "127.0.0.1"}
     assert client.post("/api/prefs", data="x", environ_base=local).status_code == 400
-    assert client.post("/api/prefs", json={"mail_hidden": "Work"}, environ_base=local).status_code == 400
-    assert client.post("/api/prefs", json={"mail_hidden": [1]}, environ_base=local).status_code == 400
-    assert client.post("/api/prefs", json={"mail_hidden": ["x" * 61]}, environ_base=local).status_code == 400
-    app_module.write_prefs({"mail_filter": ["Outlook"]})   # the earlier form of the choice is dropped
-    r = client.post("/api/prefs", json={"mail_hidden": ["Work", "uic.edu", "Work"]}, environ_base=local)
-    assert r.status_code == 200 and r.get_json()["prefs"] == {"mail_hidden": ["Work", "uic.edu"]}
-    assert client.get("/api/all").get_json()["prefs"] == {"mail_hidden": ["Work", "uic.edu"]}   # kept on disk, read back
-    assert client.post("/api/prefs", json={"mail_hidden": []}, environ_base=local).get_json()["prefs"] == {"mail_hidden": []}
+    assert client.post("/api/prefs", json={"mail_view": ["Work"]}, environ_base=local).status_code == 400
+    assert client.post("/api/prefs", json={"mail_view": "x" * 61}, environ_base=local).status_code == 400
+    app_module.write_prefs({"mail_hidden": ["Outlook"]})   # an earlier form of the choice is dropped
+    r = client.post("/api/prefs", json={"mail_view": "Work"}, environ_base=local)
+    assert r.status_code == 200 and r.get_json()["prefs"] == {"mail_view": "Work"}
+    assert client.get("/api/all").get_json()["prefs"] == {"mail_view": "Work"}   # kept on disk, read back
+    assert client.post("/api/prefs", json={"mail_view": ""}, environ_base=local).get_json()["prefs"] == {"mail_view": ""}
 
 
 def test_screen_endpoint_only_listens_to_the_pi_itself(app_module, monkeypatch):

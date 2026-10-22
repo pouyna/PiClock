@@ -70,12 +70,12 @@ def sample_mail():
                         "subject": "Call me when you get a minute", "ts": t - 30})
     personal = 5 + STATE["extra_mail"]
     # The server sends more than the screen shows; a tap on the mail panel shows the rest.
-    # A mailbox read by the PC's browser extension: its time is the page's own text, and a note says when the PC last reported.
+    # A mailbox read by the PC's browser extension: its time is the page's own text when the page gave no date.
     msgs.insert(2, {"id": "uic.edu:AAQk1", "mailbox": "uic.edu", "from": "Registrar", "subject": "Spring registration opens Monday", "ts": None, "when": "Yesterday"})
     return {"total": personal + 2 + 1, "messages": msgs[:12], "show": 4,
             "boxes": [{"name": "Personal", "unread": personal, "error": None},
                       {"name": "Work", "unread": 2, "error": None},
-                      {"name": "uic.edu", "unread": 1, "error": None, "note": "from the PC 2 h ago."}]}
+                      {"name": "uic.edu", "unread": 1, "error": None, "note": None}]}
 
 
 def sample_claude():
@@ -151,12 +151,12 @@ def settings_check():
     return jsonify({"ok": True, "unread": 3})
 
 
-PREFS = {"mail_hidden": []}
+PREFS = {"mail_view": ""}
 
 
 @app.post("/api/prefs")
 def prefs():
-    PREFS["mail_hidden"] = list((request.get_json(silent=True) or {}).get("mail_hidden") or [])
+    PREFS["mail_view"] = str((request.get_json(silent=True) or {}).get("mail_view") or "")
     return jsonify({"ok": True, "prefs": PREFS})
 
 

@@ -1,4 +1,5 @@
-// The popup: one card per mailbox the tabs have read, the helper's state, and the buttons.
+// The popup: one card per open webmail tab (its mailbox, what was read, whether the Pi answered),
+// the helper's state, and the buttons. A closed tab is gone from here and from the clock.
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h ago`; };
@@ -11,17 +12,19 @@ async function activeTab() {
 
 async function drawBoxes() {
   const all = await chrome.storage.local.get(null);
-  const boxes = Object.keys(all).filter((k) => k.startsWith("box:")).map((k) => all[k]).sort((a, b) => a.account.localeCompare(b.account));
+  const { tabs = {} } = await chrome.storage.session.get("tabs");
+  const open = new Set(Object.values(tabs).map((t) => t.account));
+  const boxes = Object.keys(all).filter((k) => k.startsWith("box:")).map((k) => all[k]).filter((b) => open.has(b.account)).sort((a, b) => a.account.localeCompare(b.account));
   if (!boxes.length) {
-    $("#boxes").innerHTML = `<div class="box"><div class="line">No mailbox read yet. Open your webmail (Outlook, Gmail, Yahoo, iCloud) in a tab and keep it open; it shows up here within a minute.</div></div>`;
+    $("#boxes").innerHTML = `<div class="box"><div class="line">No webmail tab open. Open Outlook, Gmail, Yahoo or iCloud in a tab and keep it open; it shows here, and on the clock, within a minute. Close the tab and it goes again.</div></div>`;
     return;
   }
   $("#boxes").innerHTML = boxes.map((b) => `
     <div class="box" data-account="${esc(b.account)}">
-      <div class="name">${esc(b.label || b.provider || b.account)} <span class="line">${esc(b.account !== b.label ? b.account : "")}</span></div>
+      <div class="name">${esc(b.label || b.provider || b.account)} <span class="line">${esc(b.account !== (b.label || b.provider) ? b.account : "")}</span></div>
       <div class="line">${b.needs_login ? "The page is asking for a sign-in." : `${b.unread ?? "?"} unread, ${b.count} shown, read ${ago(b.read_at)}`}</div>
-      <div class="line ${b.sent_ok ? "ok" : "bad"}">${b.sent_ok ? "Sent to the Pi." : "Not sent: " + esc(b.detail)}</div>
-      <div class="row"><input placeholder="Name on the clock, e.g. UIC" value="${esc(b.label || "")}" aria-label="Name on the clock"><button data-save>Save</button><button class="plain" data-forget>Forget</button></div>
+      <div class="line ${b.sent_ok ? "ok" : "bad"}">${b.sent_ok ? "On the clock." : "Not on the clock: " + esc(b.detail)}</div>
+      <div class="row"><input placeholder="Name on the clock, e.g. UIC" value="${esc(b.label || "")}" aria-label="Name on the clock"><button data-save>Save</button></div>
     </div>`).join("");
   $("#boxes").querySelectorAll("[data-save]").forEach((btn) => btn.addEventListener("click", async () => {
     const card = btn.closest(".box"), account = card.dataset.account, label = card.querySelector("input").value.trim();
@@ -30,12 +33,6 @@ async function drawBoxes() {
     await chrome.storage.sync.set({ labels });
     say("Saved. The clock uses the new name on the next report.");
     readNow();
-  }));
-  $("#boxes").querySelectorAll("[data-forget]").forEach((btn) => btn.addEventListener("click", async () => {
-    const account = btn.closest(".box").dataset.account;
-    const r = await chrome.runtime.sendMessage({ type: "forget", account });
-    say(r && r.ok ? "Removed from the clock. It comes back if the tab reports again." : "Couldn't tell the Pi: " + (r && r.detail));
-    drawBoxes();
   }));
 }
 
@@ -69,7 +66,7 @@ async function drawSite() {
   const url = tab && tab.url ? new URL(tab.url) : null;
   const el = $("#site");
   if (!url || url.protocol !== "https:") { el.innerHTML = ""; return; }
-  const known = ["outlook.office.com", "outlook.office365.com", "outlook.live.com", "mail.google.com", "mail.yahoo.com", "www.icloud.com"].includes(url.hostname);
+  const known = ["outlook.office.com", "outlook.office365.com", "outlook.live.com", "outlook.cloud.microsoft", "mail.google.com", "mail.yahoo.com", "www.icloud.com"].includes(url.hostname);
   const { watched = [] } = await chrome.storage.sync.get("watched");
   const isWatched = known || watched.includes(url.origin);
   el.innerHTML = isWatched

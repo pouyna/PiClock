@@ -5,7 +5,7 @@
   "description": "Shows the unread mail from the webmail tabs you have open on the PiClock screen, through this PC's SSH link to the Pi. Nothing goes to the internet.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3VqsSvPIBlEG4EBV58mQaerVN5MEBSv+1O+ewpDSE+7xsQG3gXijZOTn7nNpl12yWIHTIoS07QjsVdQLl79m2rfJRs6xa4Y4wadbxqnzfmAHVYGX+jtOqbQzJU/kKuQkikeyyjrMZ1Qi66oLt7tHnLn4n1jIQlKrhmlMlIMC8dvdd2F4qaj+WVqQqotG1FkWaC7HpTSVQ48hA+vS2upjNp43qOY1vj712uMisnkDK63cFSfJuUEYdQLxc6SUNXSgrDlVFTmOBmh6TMv3zkfj7QM0upD8iaIiuVBPP3BEtj771Gq11kaKFdg0CAU5FlmAtBgxXjcFYWYj9mGssWnl9wIDAQAB",
   "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" },
-  "permissions": ["nativeMessaging", "storage", "scripting", "activeTab"],
+  "permissions": ["nativeMessaging", "storage", "scripting", "activeTab", "alarms"],
   "optional_host_permissions": ["https://*/*"],
   "background": { "service_worker": "background.js" },
   "action": { "default_popup": "popup.html", "default_title": "PiClock mail" },

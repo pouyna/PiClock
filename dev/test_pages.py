@@ -74,30 +74,23 @@ def test_settings_scrolls_under_a_mouse_drag(preview, browser):
     page.close()
 
 
-def test_mailbox_names_hide_and_show_mailboxes(preview, browser):
-    """Every mailbox starts lit; a tap hides it, another brings it back; the last lit one stays; the choice is kept."""
+def test_one_mailbox_or_all_on_the_mail_panel(preview, browser):
+    """All is lit by default; tapping a name looks at that mailbox alone; the choice is kept across reloads."""
     page = browser.new_page(viewport={"width": 1280, "height": 800})
-    lit = lambda: page.locator(".mail-boxes button").count() - page.locator(".mail-boxes button.off").count()
     page.goto(f"{preview}/")
-    page.wait_for_selector(".mail-boxes button")
-    assert page.locator(".mail-count").inner_text() == "8" and lit() == 3 and page.locator(".mail-boxes button.all").count() == 0
-    page.locator(".mail-boxes button", has_text="Work").click()                       # hide Work
-    page.wait_for_function("document.querySelector('.mail-count').textContent === '6'")
-    assert page.locator(".mail-boxes button.off").inner_text().startswith("Work")
-    assert "Dana Whitfield" not in page.locator(".mail-list").inner_text()           # Work's mail is gone from the list
-    page.locator(".mail-boxes button", has_text="Personal").click()                   # hide Personal too
+    page.wait_for_selector(".mail-seg button")
+    assert page.locator(".mail-count").inner_text() == "8" and page.locator(".mail-seg button.on").inner_text() == "All"
+    page.locator(".mail-seg button", has_text="Work").click()
+    page.wait_for_function("document.querySelector('.mail-count').textContent === '2'")
+    assert page.locator(".mail-seg button.on").count() == 1 and page.locator(".mail-seg button.on").inner_text().startswith("Work")
+    assert page.locator(".mail-list li").count() == 2 and "Dana Whitfield" in page.locator(".mail-list").inner_text()
+    page.locator(".mail-seg button", has_text="uic.edu").click()
     page.wait_for_function("document.querySelector('.mail-count').textContent === '1'")
-    assert lit() == 1
-    page.locator(".mail-boxes button", has_text="uic.edu").click()                    # the last lit mailbox can't be hidden
-    page.wait_for_timeout(500)
-    assert page.locator(".mail-count").inner_text() == "1" and lit() == 1
     page.goto(f"{preview}/")                                                         # the choice survives a reload
     page.wait_for_function("document.querySelector('.mail-count').textContent === '1'")
-    page.locator(".mail-boxes button", has_text="Work").click()                       # bring Work back
-    page.wait_for_function("document.querySelector('.mail-count').textContent === '3'")
-    page.locator(".mail-boxes button", has_text="Personal").click()
+    page.locator(".mail-seg button", has_text="All").click()
     page.wait_for_function("document.querySelector('.mail-count').textContent === '8'")
-    assert lit() == 3
+    assert page.locator(".mail-seg button.on").inner_text() == "All"
     page.close()
 
 

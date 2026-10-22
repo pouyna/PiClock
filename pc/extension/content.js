@@ -1,6 +1,6 @@
-// Runs inside each webmail tab. Reads the inbox the page shows (readers.js) and hands a
-// report to background.js whenever it changes, and every ten minutes anyway so the Pi
-// knows the tab is still there. Reads only; the page is never changed.
+// Runs inside each webmail tab. Reads the inbox the page shows (readers.js) and hands a report
+// to background.js whenever it changes, and every five minutes anyway; says "alive" every
+// minute so the worker knows the tab is still here. Reads only; the page is never changed.
 (() => {
   if (window.__piclockMail) return;
   window.__piclockMail = true;
@@ -28,7 +28,10 @@
     if (!r) return;   // this frame isn't showing an inbox right now
     last = r;
     const k = keyOf(r), now = Date.now();
-    if (!force && k === lastKey && now - lastSent < 10 * 60 * 1000) return;
+    if (!force && k === lastKey && now - lastSent < 5 * 60 * 1000) {
+      chrome.runtime.sendMessage({ type: "alive" }).catch(() => {});
+      return;
+    }
     lastKey = k;
     lastSent = now;
     try {
@@ -43,7 +46,7 @@
     timer = setTimeout(() => tick(false), 2000);
   }
   // Watching the whole page would make a busy webmail page lag: only the message list is
-  // observed, for rows coming and going, and everything else is caught by a check every 15 s.
+  // observed, for rows coming and going, and everything else is caught by a check every minute.
   let watched = null;
   const observer = new MutationObserver(schedule);
   function watchList() {
@@ -55,12 +58,12 @@
       watched = list;
     }
   }
-  setInterval(() => { watchList(); tick(false); }, 15 * 1000);
+  setInterval(() => { watchList(); tick(false); }, 60 * 1000);
   setTimeout(() => { watchList(); tick(true); }, 3000);
 
-  // The popup asks for a fresh read, or for a sample of the page to send to whoever maintains the reader.
+  // The popup asks for a fresh read, or for a sample of the page. Its question reaches every
+  // frame of the tab; a side frame without a mail list stays quiet.
   chrome.runtime.onMessage.addListener((msg, sender, respond) => {
-    // The popup's question reaches every frame of the tab; a side frame without a mail list stays quiet.
     if (msg.type === "read-now") {
       if (window !== window.top && !snapshot()) return false;
       tick(true).then(() => respond({ reader: reader.name, report: last }));

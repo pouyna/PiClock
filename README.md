@@ -100,7 +100,7 @@ py pc\setup_extension.py
 
 It registers the helper (`pc\mail_host.py`) with Chrome and Edge for your user, checks that the helper answers and that the Pi can be reached, and prints the extension's ID. Then in Chrome: open `chrome://extensions`, turn on **Developer mode** (top right), click **Load unpacked**, and choose `C:\Users\Pouyan\Desktop\PiClock\pc\extension`. Open Outlook in a tab, sign in as usual (Duo included), and keep the tab open, pinned if you like. The clock shows the mailbox within a minute, named after the account's domain (uic.edu). Click the extension's icon to give it another name, to read the tab again, or to forget a mailbox.
 
-What to expect: new mail reaches the clock within a minute or two while the tab is open and the PC is awake. When the PC is asleep or the tab is closed, the clock keeps the last list and says how old it is; after a day it drops the list and keeps the note; after three quiet days the mailbox disappears until the tab reports again. When Outlook asks you to sign in again, the clock says so. The reader depends on how Outlook's page is built. If it ever reads nothing, click the icon, then **Copy a sample for troubleshooting**, and paste it to Claude Code; the sample contains the first row of your mail list and nothing else.
+What to expect: the clock mirrors the webmail tabs you have open. New mail reaches it within a minute or two while the tab is open and the PC is awake. Close the tab and the mailbox leaves the clock within seconds. A PC that falls asleep takes its mailboxes off the clock after 20 minutes of silence; they come back when it wakes. When Outlook asks you to sign in again, the clock says so. The reader depends on how Outlook's page is built. If it ever reads nothing, click the icon, then **Copy a sample for troubleshooting**, and paste it to Claude Code; the sample contains the first row of your mail list and nothing else.
 
 ## Changing the clock
 
@@ -155,7 +155,7 @@ On the touchscreen:
 - Tap the new-mail alert to dismiss it.
 - Tap the mail panel to see more messages, and again for the next page. The agenda works the same way. Both go back to normal by themselves after a minute.
 - Tap anywhere at night to brighten the screen for two minutes.
-- The mailbox names under the unread count are switches: tap one to hide that mailbox, tap it again to bring it back (the last one showing stays). The clock remembers this, and the chime follows it: a hidden mailbox doesn't alert.
+- Under the unread count, tap a mailbox name to look at that mailbox alone, or **All** for everything. The clock remembers it, and the chime follows it.
 - Tap the small arrow at the bottom right for **Settings** or **Hide the clock**. A hidden clock leaves the desktop free to use. It comes back by itself after 30 minutes (change this in Settings), even if the clock service restarts in between, or sooner when you open **PiClock** from the desktop icon or the menu.
 - Claude's mark at the bottom left lights up to show what Claude Code on your PC is doing: green means nothing is running, blue means it is working, yellow means it finished or is waiting for you, red means it hit the usage limit. Tap it for the sessions behind the colour.
 

@@ -16,7 +16,8 @@ A full report looks like {"account": "you@uic.edu", "provider": "Outlook",
 "subject": "Re: hike", "ts": 1761099000}], "pc": "DESKTOP-1"}. "ts" may be null when the
 page shows a time only as text; then "when" carries that text. A report with
 "needs_login": true says the page is asking for a sign-in and keeps the last messages.
-{"account": ..., "state": "removed"} forgets the mailbox. Reports that arrive out of
+{"account": ..., "state": "removed"} forgets the mailbox; the extension sends it the moment
+the tab closes, so the clock mirrors the tabs that are open. Reports that arrive out of
 order (an older "seq") are ignored. Everything in a report is text from a web page
 and is treated as untrusted: tidied, length-capped, never used as a path.
 """
@@ -29,9 +30,7 @@ import time
 from pathlib import Path
 
 MAX_MESSAGES = 20
-EXPIRE_SECONDS = 3 * 86400        # a mailbox nobody has reported for three days is gone
-MESSAGES_FRESH_SECONDS = 86400    # older messages than this are probably read by now: hide them, keep the mailbox
-STALE_SECONDS = 15 * 60           # after this, say how old the report is
+EXPIRE_SECONDS = 20 * 60   # a tab reports at least every 5 min while open; after this long without one, the mailbox is gone
 _UNSAFE = re.compile(r"[^A-Za-z0-9_.-]")
 
 
@@ -140,7 +139,7 @@ def receive(text, folder, now=None):
 
 
 def mailboxes(folder, now=None):
-    """Every mailbox the PC has reported, oldest label first. Forgotten after three quiet days."""
+    """Every mailbox the PC has reported lately, by label. One that has gone quiet is forgotten."""
     now = time.time() if now is None else now
     folder = Path(folder)
     if not folder.is_dir():
@@ -158,13 +157,12 @@ def mailboxes(folder, now=None):
                 pass
             continue
         read_at = float(data.get("read_at") or updated)
-        fresh = now - read_at <= MESSAGES_FRESH_SECONDS
         boxes.append({
             "account": data["account"],
             "provider": data.get("provider") or "Mail",
             "label": data.get("label") or data["account"],
-            "unread": data.get("unread") if fresh else None,
-            "messages": [m for m in data.get("messages", []) if isinstance(m, dict)] if fresh else [],
+            "unread": data.get("unread"),
+            "messages": [m for m in data.get("messages", []) if isinstance(m, dict)],
             "needs_login": bool(data.get("needs_login")),
             "pc": data.get("pc") or "",
             "updated": updated,

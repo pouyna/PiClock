@@ -81,20 +81,6 @@ def clean(text):
     return " ".join(str(text or "").split())
 
 
-def age_text(seconds):
-    """'3 min', '2 h', '1 day': how long ago, in the clock's plain words."""
-    m = int(seconds // 60)
-    if m < 2:
-        return "a minute"
-    if m < 60:
-        return f"{m} min"
-    h = m // 60
-    if h < 24:
-        return f"{h} h"
-    d = h // 24
-    return "a day" if d == 1 else f"{d} days"
-
-
 def retry_delay(interval, failures):
     """After a failure, try again soon (a minute, then doubling up to the normal interval).
     The first weather check often runs before the Pi's network is fully up."""
@@ -439,16 +425,9 @@ def mail_snapshot():
     if base.get("enabled") and not data and base.get("error"):
         boxes.append({"name": "Mail", "unread": None, "error": base["error"]})
     for b in extra:
-        note = None
-        if b["needs_login"]:
-            note = "needs a sign-in on the PC."
-        elif now - b["updated"] > browser_mail.STALE_SECONDS:
-            note = f"from the PC {age_text(now - b['updated'])} ago."
-        if b["unread"] is None:   # nothing read for a day: the mail is probably read by now
-            boxes.append({"name": b["label"], "unread": None, "error": None, "note": note or "nothing from the PC for a day."})
-            continue
-        boxes.append({"name": b["label"], "unread": b["unread"], "error": None, "note": note})
-        total += b["unread"]
+        unread = b["unread"] or 0
+        boxes.append({"name": b["label"], "unread": unread, "error": None, "note": "needs a sign-in on the PC." if b["needs_login"] else None})
+        total += unread
         for i, m in enumerate(b["messages"]):
             messages.append({"id": f"{b['label']}:{m['id']}", "mailbox": b["label"], "from": m["from"], "subject": m["subject"],
                              "ts": m["ts"], "when": m.get("when") or "", "_order": b["read_at"] - i})
@@ -632,19 +611,20 @@ def write_prefs(data):
 
 @app.post("/api/prefs")
 def prefs():
-    """Choices made by touch on the clock: which mailboxes the mail panel hides (a new mailbox always shows)."""
+    """Choices made by touch on the clock: which mailbox the mail panel looks at ("" means all of them)."""
     if not local_only():
         return jsonify({"error": "Only the Pi's own screen can change this."}), 403
     body = request.get_json(silent=True)
     if not isinstance(body, dict):
         return jsonify({"error": "Expected JSON."}), 400
-    names = body.get("mail_hidden")
-    if not isinstance(names, list) or len(names) > 20 or not all(isinstance(n, str) and 0 < len(n) <= 60 for n in names):
-        return jsonify({"error": "mail_hidden must be a list of mailbox names"}), 400
+    view = body.get("mail_view")
+    if not isinstance(view, str) or len(view) > 60:
+        return jsonify({"error": "mail_view must be a mailbox name, or empty for all"}), 400
     with PREFS_LOCK:
         data = read_prefs()
-        data.pop("mail_filter", None)   # the earlier form of this choice
-        data["mail_hidden"] = sorted(set(names))
+        for earlier in ("mail_filter", "mail_hidden"):   # earlier forms of this choice
+            data.pop(earlier, None)
+        data["mail_view"] = view
         write_prefs(data)
     return jsonify({"ok": True, "prefs": data})
 

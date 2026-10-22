@@ -218,13 +218,13 @@
   }
   .mail-count.zero { font-size: calc(var(--u) * 3); line-height: 1; }
   .mail-word { color: var(--mist); font-size: calc(var(--u) * 2.4); }
-  /* the mailbox names: tappable, to show one mailbox, several, or all */
-  .mail-boxes { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 0.6); width: 100%; margin-top: calc(var(--u) * 0.5); }
-  .mail-boxes button {   /* pills, clearly separate from the panel's own tap; finger-high, narrow enough for three on a line */
+  /* which mailbox the panel looks at: one segment lit, All by default */
+  .mail-seg { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 0.4); width: 100%; margin-top: calc(var(--u) * 0.5); }
+  .mail-seg button {
     font: inherit; font-size: calc(var(--u) * 1.7); line-height: 1; color: var(--mist); background: var(--dusk); border: 0; cursor: none;
-    border-radius: calc(var(--u) * 2.3); padding: 0 calc(var(--u) * 1.1); min-height: calc(var(--u) * 4.6);
+    border-radius: calc(var(--u) * 0.9); padding: 0 calc(var(--u) * 1.2); min-height: calc(var(--u) * 4.6);
   }
-  .mail-boxes button.off { opacity: 0.4; }   /* a hidden mailbox; tap to bring it back */
+  .mail-seg button.on { background: var(--bone); color: var(--night); }
   .mail-list { list-style: none; margin: calc(var(--u) * 1) 0 0; padding: 0; }
   .mail-list li {
     display: grid;
@@ -623,30 +623,22 @@ function renderAgenda() {
   el.innerHTML = errors + html;
 }
 
-// Which mailboxes the panel shows: all of them, minus the ones hidden by touch (kept on the Pi).
+// Which mailbox the panel looks at: the one chosen by touch (kept on the Pi), or all of them.
 function mailSelection(d) {
   const okBoxes = d.boxes.filter((b) => !b.error);
-  const hidden = new Set(DATA?.prefs?.mail_hidden || []);
-  let shown = okBoxes.filter((b) => !hidden.has(b.name));
-  if (!shown.length) shown = okBoxes;   // never an empty panel
-  const chosen = shown.length < okBoxes.length ? new Set(shown.map((b) => b.name)) : null;
+  const wanted = DATA?.prefs?.mail_view || "";
+  const box = okBoxes.find((b) => b.name === wanted) || null;   // a mailbox that has gone means All
   return {
-    okBoxes, chosen,
-    visible: chosen ? d.messages.filter((x) => chosen.has(x.mailbox)) : d.messages,
-    total: chosen ? shown.reduce((n, b) => n + (b.unread || 0), 0) : d.total,
+    okBoxes, view: box ? box.name : "",
+    visible: box ? d.messages.filter((x) => x.mailbox === box.name) : d.messages,
+    total: box ? (box.unread || 0) : d.total,
   };
 }
-function toggleMailbox(name) {
-  const d = DATA?.mail?.data;
-  if (!d) return;
-  const names = d.boxes.filter((b) => !b.error).map((b) => b.name);
-  let hidden = (DATA.prefs?.mail_hidden || []).filter((n) => names.includes(n));
-  if (hidden.includes(name)) hidden = hidden.filter((n) => n !== name);
-  else if (hidden.length + 1 < names.length) hidden = [...hidden, name];   // the last lit mailbox stays
-  else return;
-  DATA.prefs = { ...(DATA.prefs || {}), mail_hidden: hidden };
+function chooseMailbox(name) {
+  if (!DATA?.mail?.data) return;
+  DATA.prefs = { ...(DATA.prefs || {}), mail_view: name };
   renderMail();
-  fetch("/api/prefs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mail_hidden: hidden }) }).catch(() => {});
+  fetch("/api/prefs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mail_view: name }) }).catch(() => {});
 }
 
 function renderMail() {
@@ -658,8 +650,9 @@ function renderMail() {
 
   const now = Date.now();
   const sel = mailSelection(d);
-  const chip = (b) => `<button class="${sel.chosen && !sel.chosen.has(b.name) ? "off" : ""}" data-box="${esc(b.name)}" aria-pressed="${!(sel.chosen && !sel.chosen.has(b.name))}">${esc(b.name)} ${b.unread ?? ""}</button>`;
-  const boxes = d.boxes.length > 1 && sel.okBoxes.length ? `<span class="mail-boxes">${sel.okBoxes.map(chip).join("")}</span>` : "";
+  const seg = (name, text) => `<button class="${sel.view === name ? "on" : ""}" data-box="${esc(name)}" aria-pressed="${sel.view === name}">${text}</button>`;
+  const boxes = d.boxes.length > 1 && sel.okBoxes.length
+    ? `<span class="mail-seg">${seg("", "All")}${sel.okBoxes.map((b) => seg(b.name, `${esc(b.name)} ${b.unread ?? ""}`)).join("")}</span>` : "";
   const head = sel.total
     ? `<div class="mail-head"><span class="mail-count">${sel.total}</span><span class="mail-word">unread</span>${boxes}</div>`
     : `<div class="mail-head"><span class="mail-count zero">No unread mail</span>${boxes}</div>`;
@@ -669,7 +662,7 @@ function renderMail() {
       <span class="m-from">${esc(x.from)}</span><span class="m-time">${esc(ago(x.ts) || x.when || "")}</span>
       <span class="m-subj">${esc(x.subject)}</span>
     </li>`).join("");
-  const errors = d.boxes.filter((b) => (b.error || b.note) && (!sel.chosen || sel.chosen.has(b.name))).map((b) => `<p class="note">${esc(b.name)}: ${esc(b.error || b.note)}</p>`).join("");
+  const errors = d.boxes.filter((b) => (b.error || b.note) && (!sel.view || b.name === sel.view)).map((b) => `<p class="note">${esc(b.name)}: ${esc(b.error || b.note)}</p>`).join("");
   el.innerHTML = head + errors + (list ? `<ul class="mail-list">${list}</ul>` : "");
 }
 
@@ -782,8 +775,8 @@ $("#agenda").addEventListener("click", () => {
 
 $("#mail").addEventListener("click", (e) => {
   const el = $("#mail");
-  const chip = e.target.closest(".mail-boxes button");
-  if (chip) { toggleMailbox(chip.dataset.box); return; }   // a remembered choice, not a passing tap
+  const seg = e.target.closest(".mail-seg button");
+  if (seg) { chooseMailbox(seg.dataset.box); return; }   // a remembered choice, not a passing tap
   if (!mailMore) { mailMore = true; renderMail(); } else pagePanel(el);
   revertLater("mail", 60000, () => { mailMore = false; resetPanel(el); renderMail(); });
 });

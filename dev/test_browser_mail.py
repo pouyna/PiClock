@@ -60,11 +60,10 @@ def test_order_sign_in_and_removal(tmp_path):
     assert browser_mail.receive(json.dumps({"account": "ME@uic.edu", "seq": T0 + 300, "state": "removed"}), tmp_path) == "removed"
 
 
-def test_quiet_mailboxes_hide_their_mail_then_disappear(tmp_path):
+def test_quiet_mailboxes_disappear(tmp_path):
     browser_mail.receive(report(), tmp_path, now=T0)
-    b = browser_mail.mailboxes(tmp_path, now=T0 + DAY + 1)[0]
-    assert b["unread"] is None and b["messages"] == []
-    assert browser_mail.mailboxes(tmp_path, now=T0 + 3 * DAY + 1) == [] and not list(tmp_path.glob("*.json"))
+    assert len(browser_mail.mailboxes(tmp_path, now=T0 + 19 * 60)) == 1
+    assert browser_mail.mailboxes(tmp_path, now=T0 + 20 * 60 + 1) == [] and not list(tmp_path.glob("*.json"))
 
 
 class FakePoller:
@@ -95,14 +94,11 @@ def test_api_shows_browser_mailboxes_next_to_the_clocks_own(app_module, tmp_path
     assert [x["id"] for x in m["data"]["messages"]] == ["uic.edu:AAQk2", "Personal:7", "uic.edu:AAQk1"]
     app_module.POLLERS.clear()
 
-    # the notes: an old report, a sign-in page, a day of silence
-    browser_mail.receive(report(now=now - 20 * 60, seq=now + 0.5), tmp_path, now=now - 20 * 60)
-    assert client.get("/api/all").get_json()["mail"]["data"]["boxes"][0]["note"] == "from the PC 20 min ago."
+    # a sign-in page gets a note; a tab that has gone quiet takes its mailbox away
     browser_mail.receive(json.dumps({"account": "me@uic.edu", "seq": now + 1, "needs_login": True}), tmp_path, now=now)
     assert client.get("/api/all").get_json()["mail"]["data"]["boxes"][0]["note"] == "needs a sign-in on the PC."
-    browser_mail.receive(report(now=now - 2 * DAY, seq=now + 2), tmp_path, now=now - 2 * DAY)
-    box = client.get("/api/all").get_json()["mail"]["data"]["boxes"][0]
-    assert box["unread"] is None and box["note"] == "from the PC 2 days ago."
+    browser_mail.receive(report(now=now - 25 * 60, seq=now + 2), tmp_path, now=now - 25 * 60)
+    assert client.get("/api/all").get_json()["mail"]["enabled"] is False
 
 
 def test_without_reports_mail_is_as_before(app_module, tmp_path, monkeypatch):
@@ -112,10 +108,6 @@ def test_without_reports_mail_is_as_before(app_module, tmp_path, monkeypatch):
 
 def client_mail(app_module):
     return app_module.app.test_client().get("/api/all").get_json()["mail"]
-
-
-def test_age_text_speaks_plainly(app_module):
-    assert [app_module.age_text(s) for s in (30, 90, 20 * 60, 3 * 3600, 25 * 3600, 3 * DAY)] == ["a minute", "a minute", "20 min", "3 h", "a day", "3 days"]
 
 
 def test_microsoft_hosts_get_the_extension_advice(app_module, monkeypatch):

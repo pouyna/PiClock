@@ -69,7 +69,7 @@ def main():
                                  shoot(port, "tap_agenda_800x480", (800, 480), tap("#agenda")),
                                  shoot(port, "tap_hide_800x480", (800, 480), tap("#hide")),
                                  shoot(port, "tap_light_800x480", (800, 480), tap("#light")),
-                                 shoot(port, "tap_mailbox_800x480", (800, 480), tap(".mail-boxes button:nth-child(2)"))]),
+                                 shoot(port, "tap_mailbox_800x480", (800, 480), tap(".mail-seg button:nth-child(3)"))]),
             (["--no-claude"], lambda port: shoot(port, "no_claude_800x480", (800, 480))),
             (["--light", "red"], lambda port: [shoot(port, "settings_800x480", (800, 480), lambda page: page.goto(f"http://127.0.0.1:{port}/settings") and page.wait_for_timeout(800)),
                                                shoot(port, "settings_keyboard_800x480", (800, 480), lambda page: (page.goto(f"http://127.0.0.1:{port}/settings"), page.wait_for_timeout(800), page.click('[data-edit="weather.location_name"]'), page.wait_for_timeout(400))),
